@@ -81,7 +81,7 @@ func main() {
 			dowhile = false
 		case <-purgeChan:
 			if config.debug {
-				log.Printf("debug - clean old statusNG twistees timer triggered\n")
+				log.Printf("debug - purge old statusNG twistees timer triggered\n")
 			}
 			config.seeder.purgeNG()
 		case <-dnsChan:

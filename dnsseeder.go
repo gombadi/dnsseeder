@@ -265,6 +265,9 @@ func crc16(bs []byte) uint16 {
 }
 
 func (s *Seeder) purgeNG() {
+
+	c := 0
+
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
@@ -276,12 +279,17 @@ func (s *Seeder) purgeNG() {
 			if config.verbose {
 				log.Printf("status - purging twistee %s after %v failed connections\n", k, tw.connectFails)
 			}
+
+			c++
 			// remove the map entry and mark the old twistee as
 			// nil so garbage collector will remove it
+			s.theList[k] = nil
 			delete(s.theList, k)
-			tw = nil
 		}
 
+	}
+	if config.verbose {
+		log.Printf("status - purging complete. %v twistees purged\n", c)
 	}
 
 }
