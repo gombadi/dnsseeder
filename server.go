@@ -49,11 +49,6 @@ func updateDNS(s *Seeder) {
 			}
 
 			if t == DNSV4STD || t == DNSV4NON {
-				// check that the ip address is a valid IPv4 address
-				if x := tw.na.IP.To4(); x == nil {
-					log.Printf("error - produce dns.RR expected ipv4 address from %v\n", k)
-					continue
-				}
 				if t == DNSV4STD && tw.dnsType == DNSV4STD {
 					r := new(dns.A)
 					r.Hdr = dns.RR_Header{Name: config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
@@ -77,11 +72,6 @@ func updateDNS(s *Seeder) {
 				}
 			}
 			if t == DNSV6STD || t == DNSV6NON {
-				// check that the ip address is not a valid IPv4 address
-				//if x := tw.na.IP.To4(); x != nil {
-				//	log.Printf("error - produce dns.RR expected ipv6 address from %v\n", k)
-				//	continue
-				//}
 				if t == DNSV6STD && tw.dnsType == DNSV6STD {
 					r := new(dns.AAAA)
 					r.Hdr = dns.RR_Header{Name: config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 60}
