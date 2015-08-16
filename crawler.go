@@ -52,9 +52,10 @@ func crawlTwistee(tw *Twistee) {
 		// no more to do so return which will shutdown the goroutine & call
 		// the deffered cleanup
 		if config.verbose {
-			log.Printf("debug - failed crawl: twistee %s newstatus: %v:%v\n",
+			log.Printf("debug - failed crawl: twistee %s failcount: %v newstatus: %v:%v\n",
 				net.JoinHostPort(tw.na.IP.String(),
 					strconv.Itoa(int(tw.na.Port))),
+				tw.connectFails,
 				tw.status,
 				tw.rating)
 		}

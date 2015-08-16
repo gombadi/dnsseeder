@@ -143,21 +143,25 @@ func handleDNSStd(w dns.ResponseWriter, r *dns.Msg) {
 	}}
 	m.SetReply(r)
 
+	var qtype string
+
 	switch r.Question[0].Qtype {
 	case dns.TypeA:
 		latest.mtx.RLock()
 		m.Answer = getv4stdRR()
 		latest.mtx.RUnlock()
+		qtype = "A"
 	case dns.TypeAAAA:
 		latest.mtx.RLock()
 		m.Answer = getv6stdRR()
 		latest.mtx.RUnlock()
+		qtype = "AAAA"
 	default:
 		// return no answer to all other queries
 
 	}
 	if config.verbose {
-		log.Printf("debug - standard port DNS response to ip: %s\n", w.RemoteAddr().String())
+		log.Printf("debug - standard port DNS response to ip: %s Query Type: %s\n", w.RemoteAddr().String(), qtype)
 	}
 
 	// FIXME - add stats and query counts
@@ -175,21 +179,25 @@ func handleDNSNon(w dns.ResponseWriter, r *dns.Msg) {
 	}}
 	m.SetReply(r)
 
+	var qtype string
+
 	switch r.Question[0].Qtype {
 	case dns.TypeA:
 		latest.mtx.RLock()
 		m.Answer = getv4nonRR()
 		latest.mtx.RUnlock()
+		qtype = "A"
 	case dns.TypeAAAA:
 		latest.mtx.RLock()
 		m.Answer = getv6nonRR()
 		latest.mtx.RUnlock()
+		qtype = "AAAA"
 	default:
 		// return no answer to all other queries
 
 	}
 	if config.verbose {
-		log.Printf("debug - non standard port DNS response to ip: %s\n", w.RemoteAddr().String())
+		log.Printf("debug - non standard port DNS response to ip: %s Query Type: %s\n", w.RemoteAddr().String(), qtype)
 	}
 
 	// FIXME - add stats and query counts
