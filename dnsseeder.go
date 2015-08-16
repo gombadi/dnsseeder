@@ -221,6 +221,9 @@ func (s *Seeder) addNa(nNa *wire.NetAddress) bool {
 		if nNa.Port != TWSTDPORT {
 			nt.dnsType = DNSV4NON
 
+			// force ipv4 address into a 4 byte buffer
+			nt.na.IP = nt.na.IP.To4()
+
 			// produce the nonstdIP
 			nt.nonstdIP = getNonStdIP(nt.na.IP, nt.na.Port)
 		}
@@ -247,8 +250,12 @@ func getNonStdIP(rip net.IP, port uint16) net.IP {
 	b[2] = byte(port >> 8)
 	b[3] = byte(port & 0xff)
 
-	//nip := net.IPv4(b[0], b[1], b[2], b[3])
-	return net.IPv4(b[0], b[1], b[2], b[3])
+	encip := net.IPv4(b[0], b[1], b[2], b[3])
+	if config.debug {
+		log.Printf("debug encode nonstd - realip: %s port: %v encip: %s crc: %x\n", rip.String(), port, encip.String(), crcAddr)
+	}
+
+	return encip
 }
 
 // crc16 produces a crc16 from a byte slice
