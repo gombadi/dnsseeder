@@ -38,7 +38,7 @@ func updateDNS(s *Seeder) {
 
 		numRR := 0
 
-		for k, tw := range s.theList {
+		for _, tw := range s.theList {
 			// when we reach max exit
 			if numRR >= 15 {
 				break
