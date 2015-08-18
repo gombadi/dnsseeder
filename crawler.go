@@ -14,6 +14,11 @@ import (
 // list of currently active addresses
 func crawlTwistee(tw *Twistee) {
 
+	tw.crawlActive = true
+	tw.crawlStart = time.Now()
+
+	defer crawlEnd(tw)
+
 	if config.debug {
 		log.Printf("status - start crawl: twistee %s status: %v:%v lastcrawl: %s\n",
 			net.JoinHostPort(tw.na.IP.String(),
@@ -22,11 +27,6 @@ func crawlTwistee(tw *Twistee) {
 			tw.rating,
 			time.Since(tw.crawlStart).String())
 	}
-
-	tw.crawlActive = true
-	tw.crawlStart = time.Now()
-
-	defer crawlEnd(tw)
 
 	// connect to the remote ip and ask them for their addr list
 	ras, err := crawlIP(tw)
@@ -202,6 +202,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 		return nil, err
 	}
 
+	c := 0
 	dowhile := true
 	for dowhile == true {
 
@@ -224,10 +225,14 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 				}
 			}
 		}
+		// if we get more than 25 messages before the addr we asked for then give up on this client
+		if c++; c >= 25 {
+			dowhile = false
+		}
 	}
 
 	// should never get here but need a return command
-	return nil, nil
+	return nil, errors.New("FIXME - something went wrong and did not get an Addr response")
 }
 
 /*

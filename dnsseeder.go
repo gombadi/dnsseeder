@@ -150,7 +150,6 @@ func (s *Seeder) startCrawlers() {
 			}
 
 			// all looks go so start a go routine to crawl the remote twistee
-			tw.crawlActive = true
 			go crawlTwistee(tw)
 			c.started++
 		}

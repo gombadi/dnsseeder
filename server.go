@@ -40,7 +40,7 @@ func updateDNS(s *Seeder) {
 
 		for _, tw := range s.theList {
 			// when we reach max exit
-			if numRR >= 15 {
+			if numRR >= 25 {
 				break
 			}
 
