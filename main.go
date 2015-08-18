@@ -49,9 +49,14 @@ func main() {
 
 	log.Printf("Starting dnsseeder system for host %s.\n", config.host)
 
+	if config.verbose == false {
+		log.Printf("status - Running in quiet mode with limited output produced\n")
+	}
+
 	// FIXME - setup/make the data structures in Seeder
 	config.seeder = &Seeder{}
 	config.seeder.theList = make(map[string]*Twistee)
+	config.seeder.uptime = time.Now()
 
 	// start dns server
 	dns.HandleFunc("nonstd."+config.host, handleDNSNon)
@@ -72,18 +77,18 @@ func main() {
 	// used to start crawlers on a regular basis
 	crawlChan := time.NewTicker(time.Second * 22).C
 	// used to remove old statusNG twistees that have reached fail count
-	purgeChan := time.NewTicker(time.Hour * 2).C
+	auditChan := time.NewTicker(time.Hour * 1).C
 
 	dowhile := true
 	for dowhile == true {
 		select {
 		case <-sig:
 			dowhile = false
-		case <-purgeChan:
+		case <-auditChan:
 			if config.debug {
-				log.Printf("debug - purge old statusNG twistees timer triggered\n")
+				log.Printf("debug - Audit twistees timer triggered\n")
 			}
-			config.seeder.purgeNG()
+			config.seeder.auditTwistees()
 		case <-dnsChan:
 			if config.debug {
 				log.Printf("debug - DNS - Updating latest ip addresses timer triggered\n")
@@ -91,7 +96,7 @@ func main() {
 			config.seeder.loadDNS()
 		case <-crawlChan:
 			if config.debug {
-				log.Printf("debug - start crawlers timer triggered\n")
+				log.Printf("debug - Start crawlers timer triggered\n")
 			}
 			config.seeder.startCrawlers()
 		}

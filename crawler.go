@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"log"
 	"net"
 	"strconv"
@@ -9,6 +8,16 @@ import (
 
 	"github.com/btcsuite/btcd/wire"
 )
+
+type CrawlError struct {
+	errLoc string
+	Err    error
+}
+
+// Error returns a formatted error about a crawl
+func (e *CrawlError) Error() string {
+	return "err: " + e.errLoc + ": " + e.Err.Error()
+}
 
 // crawlTwistee runs in a goroutine, crawls the remote ip and updates the master
 // list of currently active addresses
@@ -29,35 +38,41 @@ func crawlTwistee(tw *Twistee) {
 	}
 
 	// connect to the remote ip and ask them for their addr list
-	ras, err := crawlIP(tw)
-	if err != nil {
+	ras, e := crawlIP(tw)
+	if e != nil {
 		// update the fact that we have not connected to this twistee
 		tw.lastTry = time.Now()
 		tw.connectFails++
+		tw.statusStr = e.Error()
+
 		// update the status of this failed twistee
 		switch tw.status {
 		case statusRG:
 			if tw.rating += 25; tw.rating > 30 {
 				tw.status = statusWG
+				tw.statusTime = time.Now()
 			}
 		case statusCG:
 			if tw.rating += 25; tw.rating >= 50 {
 				tw.status = statusWG
+				tw.statusTime = time.Now()
 			}
 		case statusWG:
 			if tw.rating += 30; tw.rating >= 100 {
 				tw.status = statusNG // not able to connect to this twistee so ignore
+				tw.statusTime = time.Now()
 			}
 		}
 		// no more to do so return which will shutdown the goroutine & call
 		// the deffered cleanup
 		if config.verbose {
-			log.Printf("debug - failed crawl: twistee %s failcount: %v newstatus: %v:%v\n",
+			log.Printf("debug - failed crawl: twistee %s s:r:f: %v:%v:%v %s\n",
 				net.JoinHostPort(tw.na.IP.String(),
 					strconv.Itoa(int(tw.na.Port))),
-				tw.connectFails,
 				tw.status,
-				tw.rating)
+				tw.rating,
+				tw.connectFails,
+				tw.statusStr)
 		}
 		return
 	}
@@ -65,11 +80,13 @@ func crawlTwistee(tw *Twistee) {
 	// succesful connection and addresses received so mark status
 	if tw.status != statusCG {
 		tw.status = statusCG
+		tw.statusTime = time.Now()
 	}
 	tw.rating = 0
 	tw.connectFails = 0
 	tw.lastConnect = time.Now()
 	tw.lastTry = time.Now()
+	tw.statusStr = "ok: received remote address list"
 
 	added := 0
 
@@ -103,7 +120,7 @@ func crawlEnd(tw *Twistee) {
 }
 
 // crawlIP retrievs a slice of ip addresses from a client
-func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
+func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 
 	ip := tw.na.IP.String()
 	port := strconv.Itoa(int(tw.na.Port))
@@ -115,7 +132,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 		if config.debug {
 			log.Printf("error - Could not connect to %s - %v\n", ip, err)
 		}
-		return nil, err
+		return nil, &CrawlError{"", err}
 	}
 
 	defer conn.Close()
@@ -127,23 +144,20 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 	// last parameter is lastblock
 	msgver, err := wire.NewMsgVersionFromConn(conn, NOUNCE, 0)
 	if err != nil {
-		log.Printf("error - NewMsgVer from conn: %v\n", err)
-		return nil, err
+		return nil, &CrawlError{"Create NewMsgVersionFromConn", err}
 	}
 
 	err = wire.WriteMessage(conn, msgver, PVER, TWISTNET)
 	if err != nil {
 		// Log and handle the error
-		log.Printf("error - %s:%s Write Message: %v\n", ip, port, err)
-		return nil, err
+		return nil, &CrawlError{"Write Version Message", err}
 	}
 
 	// first message received should be version
 	msg, _, err := wire.ReadMessage(conn, PVER, TWISTNET)
 	if err != nil {
 		// Log and handle the error
-		log.Printf("error - %s:%s Read Message after sending version: %v\n", ip, port, err)
-		return nil, err
+		return nil, &CrawlError{"Read message after sending Version", err}
 	}
 
 	switch msg := msg.(type) {
@@ -153,10 +167,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 			log.Printf("%s - Remote version: %v\n", ip, msg.ProtocolVersion)
 		}
 	default:
-		if config.debug {
-			log.Printf("error: expected Version Message but received: %v\n", msg.Command())
-		}
-		return nil, errors.New("Error. Did not receive expected Version message from remote client")
+		return nil, &CrawlError{"Did not receive expected Version message from remote client", err}
 	}
 
 	// FIXME - update twistee client version with what they just said
@@ -166,30 +177,22 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 
 	err = wire.WriteMessage(conn, msgverack, PVER, TWISTNET)
 	if err != nil {
-		// Log and handle the error
-		log.Printf("error - %s:%s Writing Message Ver Ack failed: %v\n", ip, port, err)
-		return nil, err
+		return nil, &CrawlError{"writing message VerAck", err}
 	}
 
 	// second message received should be verack
 	msg, _, err = wire.ReadMessage(conn, PVER, TWISTNET)
 	if err != nil {
-		// Log and handle the error
-		log.Printf("error - %s:%s Reading Message expected Ver Ack: %v\n", ip, port, err)
-		return nil, err
+		return nil, &CrawlError{"reading expected Ver Ack from remote client", err}
 	}
 
-	switch msg := msg.(type) {
+	switch msg.(type) {
 	case *wire.MsgVerAck:
 		if config.debug {
-			// The message is a pointer to a MsgVersion struct.
 			log.Printf("%s - received Version Ack\n", ip)
 		}
 	default:
-		if config.debug {
-			log.Printf("error: expected Version Ack Message but received: %v\n", msg.Command())
-		}
-		return nil, errors.New("Error. Did not receive expected Version Ack message from remote client")
+		return nil, &CrawlError{"Did not receive expected Ver Ack message from remote client", err}
 	}
 
 	// send getaddr command
@@ -197,9 +200,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 
 	err = wire.WriteMessage(conn, msgGetAddr, PVER, TWISTNET)
 	if err != nil {
-		// Log and handle the error
-		log.Printf("error - %s:%s writing message Get Addr: %v\n", ip, port, err)
-		return nil, err
+		return nil, &CrawlError{"writing Addr message to remote client", err}
 	}
 
 	c := 0
@@ -217,8 +218,8 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 				if config.debug {
 					log.Printf("%s - received valid addr message\n", ip)
 				}
-				return msg.AddrList, nil
 				dowhile = false
+				return msg.AddrList, nil
 			default:
 				if config.debug {
 					log.Printf("%s - ignoring message - %v\n", ip, msg.Command())
@@ -231,8 +232,8 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, error) {
 		}
 	}
 
-	// should never get here but need a return command
-	return nil, errors.New("FIXME - something went wrong and did not get an Addr response")
+	// received too many messages before requested Addr
+	return nil, &CrawlError{"message loop - did not receive remote addresses in first 25 messages from remote client", err}
 }
 
 /*

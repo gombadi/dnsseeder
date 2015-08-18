@@ -23,9 +23,7 @@ const (
 
 	TWSTDPORT = 28333 // standard port twister listens on
 
-	MAXGO = 10 // max number of goroutines to start in one run
-
-	MAXFAILS = 35 // max number of connect fails before we delete a twistee
+	MAXFAILS = 55 // max number of connect fails before we delete a twistee. Just over 24 hours(checked every 33 minutes)
 
 	// DNS Type. Is this twistee using v4/v6 and standard or non standard ports
 	DNSV4STD = 1
@@ -42,6 +40,7 @@ const (
 )
 
 type Seeder struct {
+	uptime  time.Time
 	theList map[string]*Twistee
 	mtx     sync.RWMutex
 }
@@ -52,10 +51,12 @@ type Twistee struct {
 	lastConnect      time.Time
 	lastTry          time.Time
 	crawlStart       time.Time
+	statusTime       time.Time
 	crawlActive      bool
 	connectFails     uint32
 	clientVersion    int32
 	clientSubVersion string
+	statusStr        string
 	status           uint32 // rg,cg,wg,ng
 	rating           uint32 // if it reaches 100 then we ban them
 	nonstdIP         net.IP
@@ -118,7 +119,7 @@ func (s *Seeder) startCrawlers() {
 		{"statusRG", statusRG, 10, 0, 0, 184},
 		{"statusCG", statusCG, 10, 0, 0, 325},
 		{"statusWG", statusWG, 10, 0, 0, 237},
-		{"statusNG", statusNG, 20, 0, 0, 3654},
+		{"statusNG", statusNG, 20, 0, 0, 1876},
 	}
 
 	s.mtx.RLock()
@@ -200,6 +201,7 @@ func (s *Seeder) addNa(nNa *wire.NetAddress) bool {
 		lastConnect:   time.Now(),
 		clientVersion: 0, // FIXME - need to get from the crawl somehow
 		status:        statusRG,
+		statusTime:    time.Now(),
 		dnsType:       DNSV4STD,
 	}
 
@@ -231,7 +233,11 @@ func (s *Seeder) addNa(nNa *wire.NetAddress) bool {
 	// generate the key and add to theList
 	k := net.JoinHostPort(nNa.IP.String(), strconv.Itoa(int(nNa.Port)))
 	s.mtx.Lock()
-	s.theList[k] = &nt
+	// final check to make sure another twistee & goroutine has not already added this twistee
+	// FIXME migrate to use channels
+	if _, dup := s.theList[k]; dup == false {
+		s.theList[k] = &nt
+	}
 	s.mtx.Unlock()
 
 	return true
@@ -270,18 +276,41 @@ func crc16(bs []byte) uint16 {
 	return crc
 }
 
-func (s *Seeder) purgeNG() {
+func (s *Seeder) auditTwistees() {
 
 	c := 0
+	log.Printf("status - Audit start. System Uptime: %s\n", time.Since(s.uptime).String())
 
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
 	for k, tw := range s.theList {
-		if tw.status != statusNG {
-			continue
+
+		if tw.crawlActive == true {
+			if time.Now().Unix()-tw.crawlStart.Unix() >= 300 {
+				log.Printf("warning - long running crawl > 5 minutes ====\n- %s status:rating:fails %v:%v:%v crawl start: %s last status: %s\n====\n",
+					k,
+					tw.status,
+					tw.rating,
+					tw.connectFails,
+					tw.crawlStart.String(),
+					tw.statusStr)
+			}
 		}
-		if tw.connectFails > MAXFAILS {
+		if tw.status == statusRG || tw.status == statusWG {
+			if time.Now().Unix()-tw.statusTime.Unix() >= 900 {
+				log.Printf("warning - unchanged status > 15 minutes ====\n- %s status:rating:fails %v:%v:%v last status change: %s last status: %s\n====\n",
+					k,
+					tw.status,
+					tw.rating,
+					tw.connectFails,
+					tw.statusTime.String(),
+					tw.statusStr)
+			}
+		}
+
+		// last audit task is to remove twistees that we can not connect to
+		if tw.status == statusNG && tw.connectFails > MAXFAILS {
 			if config.verbose {
 				log.Printf("status - purging twistee %s after %v failed connections\n", k, tw.connectFails)
 			}
@@ -295,7 +324,7 @@ func (s *Seeder) purgeNG() {
 
 	}
 	if config.verbose {
-		log.Printf("status - purging complete. %v twistees purged\n", c)
+		log.Printf("status - Audit complete. %v twistees purged\n", c)
 	}
 
 }
