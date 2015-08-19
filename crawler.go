@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"net"
 	"strconv"
@@ -170,7 +171,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 			log.Printf("%s - Remote version: %v\n", ip, msg.ProtocolVersion)
 		}
 	default:
-		return nil, &CrawlError{"Did not receive expected Version message from remote client", err}
+		return nil, &CrawlError{"Did not receive expected Version message from remote client", errors.New("")}
 	}
 
 	// FIXME - update twistee client version with what they just said
@@ -195,7 +196,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 			log.Printf("%s - received Version Ack\n", ip)
 		}
 	default:
-		return nil, &CrawlError{"Did not receive expected Ver Ack message from remote client", err}
+		return nil, &CrawlError{"Did not receive expected Ver Ack message from remote client", errors.New("")}
 	}
 
 	// send getaddr command
@@ -236,7 +237,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 	}
 
 	// received too many messages before requested Addr
-	return nil, &CrawlError{"message loop - did not receive remote addresses in first 25 messages from remote client", err}
+	return nil, &CrawlError{"message loop - did not receive remote addresses in first 25 messages from remote client", errors.New("")}
 }
 
 /*
