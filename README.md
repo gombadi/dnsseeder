@@ -18,9 +18,19 @@ Simply use go get to download the code:
     $ go get github.com/gombadi/dnsseeder
 
 Dependencies are handled by the Go vendor directory.
-
 Note: This means the codebase requires Go 1.5 or higher and use of GO15VENDOREXPERIMENT=1
 
+There seem to be some issues with using go get so a process that works for me on Unix based systems is -
+
+```
+cd ${HOME}
+mkdir -p go/src/github.com/gombadi
+cd go/src/github.com/gombadi
+git clone the repo into this directory
+cd dnsseeder
+go install
+
+```
 
 ## Usage
 
