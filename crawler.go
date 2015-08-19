@@ -140,6 +140,9 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 		log.Printf("%s - Connected to remote address. Last connect was %v ago\n", ip, time.Since(tw.lastConnect).String())
 	}
 
+	// set a deadline for all comms to be done by. After this all i/o will error
+	conn.SetDeadline(time.Now().Add(time.Second * MAXTO))
+
 	// First command to remote end needs to be a version command
 	// last parameter is lastblock
 	msgver, err := wire.NewMsgVersionFromConn(conn, NOUNCE, 0)
