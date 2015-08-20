@@ -23,7 +23,7 @@ const (
 
 	TWSTDPORT = 28333 // standard port twister listens on
 
-	MAXFAILS = 48 // max number of connect fails before we delete a twistee. Just over 24 hours(checked every 33 minutes)
+	MAXFAILS = 58 // max number of connect fails before we delete a twistee. Just over 24 hours(checked every 33 minutes)
 
 	MAXTO = 250 // max seconds (4min 10 sec) for all comms to twistee to complete before we timeout
 
