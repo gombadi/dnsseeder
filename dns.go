@@ -151,7 +151,7 @@ func handleDNSStd(w dns.ResponseWriter, r *dns.Msg) {
 
 	}
 	if config.verbose {
-		log.Printf("debug - standard port DNS response to ip: %s Query Type: %s\n", w.RemoteAddr().String(), qtype)
+		log.Printf("status - DNS response Type: standard  To IP: %s  Query Type: %s\n", w.RemoteAddr().String(), qtype)
 	}
 
 	// FIXME - add stats and query counts
@@ -187,7 +187,7 @@ func handleDNSNon(w dns.ResponseWriter, r *dns.Msg) {
 
 	}
 	if config.verbose {
-		log.Printf("debug - non standard port DNS response to ip: %s Query Type: %s\n", w.RemoteAddr().String(), qtype)
+		log.Printf("status - DNS response Type: non-standard  To IP: %s  Query Type: %s\n", w.RemoteAddr().String(), qtype)
 	}
 
 	// FIXME - add stats and query counts

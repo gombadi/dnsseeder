@@ -8,8 +8,7 @@ It is based on the original twister-seeder https://github.com/miguelfreitas/twis
 Also see the associated utility to display information about [non-standard ip addresses](https://github.com/gombadi/nonstd/)
 
 
-> **NOTE:** This repository is under ongoing development and
-is likely to break over time. Use at your own risk.
+> **NOTE:** This repository is under ongoing development. Stable releases have been tagged and should be used for production systems.
 
 
 ## Installing
@@ -32,6 +31,8 @@ cd dnsseeder
 go install
 
 ```
+The binary will then be available in ${HOME}/go/bin
+
 
 ## Usage
 

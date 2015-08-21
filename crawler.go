@@ -30,7 +30,7 @@ func crawlTwistee(tw *Twistee) {
 	defer crawlEnd(tw)
 
 	if config.debug {
-		log.Printf("status - start crawl: twistee %s status: %v:%v lastcrawl: %s\n",
+		log.Printf("debug - start crawl: twistee %s status: %v:%v lastcrawl: %s\n",
 			net.JoinHostPort(tw.na.IP.String(),
 				strconv.Itoa(int(tw.na.Port))),
 			tw.status,
@@ -40,6 +40,7 @@ func crawlTwistee(tw *Twistee) {
 
 	// connect to the remote ip and ask them for their addr list
 	ras, e := crawlIP(tw)
+
 	if e != nil {
 		// update the fact that we have not connected to this twistee
 		tw.lastTry = time.Now()
@@ -67,7 +68,7 @@ func crawlTwistee(tw *Twistee) {
 		// no more to do so return which will shutdown the goroutine & call
 		// the deffered cleanup
 		if config.verbose {
-			log.Printf("debug - failed crawl: twistee %s s:r:f: %v:%v:%v %s\n",
+			log.Printf("status - failed crawl: twistee %s s:r:f: %v:%v:%v %s\n",
 				net.JoinHostPort(tw.na.IP.String(),
 					strconv.Itoa(int(tw.na.Port))),
 				tw.status,
@@ -134,14 +135,14 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 	conn, err := net.DialTimeout("tcp", dialString, time.Second*10)
 	if err != nil {
 		if config.debug {
-			log.Printf("error - Could not connect to %s - %v\n", ip, err)
+			log.Printf("debug - Could not connect to %s - %v\n", ip, err)
 		}
 		return nil, &CrawlError{"", err}
 	}
 
 	defer conn.Close()
 	if config.debug {
-		log.Printf("%s - Connected to remote address. Last connect was %v ago\n", ip, time.Since(tw.lastConnect).String())
+		log.Printf("debug - Connected to remote address: %s Last connect was %v ago\n", ip, time.Since(tw.lastConnect).String())
 	}
 
 	// set a deadline for all comms to be done by. After this all i/o will error

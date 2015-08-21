@@ -255,7 +255,7 @@ func getNonStdIP(rip net.IP, port uint16) net.IP {
 
 	encip := net.IPv4(b[0], b[1], b[2], b[3])
 	if config.debug {
-		log.Printf("debug encode nonstd - realip: %s port: %v encip: %s crc: %x\n", rip.String(), port, encip.String(), crcAddr)
+		log.Printf("debug - encode nonstd - realip: %s port: %v encip: %s crc: %x\n", rip.String(), port, encip.String(), crcAddr)
 	}
 
 	return encip
