@@ -157,14 +157,10 @@ func (s *Seeder) startCrawlers() {
 			c.started++
 		}
 
-		if config.verbose || config.stats {
-			log.Printf("stats - started crawler: %s total: %v started: %v\n", c.desc, c.totalCount, c.started)
-		}
+		log.Printf("stats - started crawler: %s total: %v started: %v\n", c.desc, c.totalCount, c.started)
 	}
 
-	if config.verbose || config.stats {
-		log.Printf("stats - completed starting crawlers. total twistees: %d\n", tcount)
-	}
+	log.Printf("stats - crawlers started. total twistees: %d\n", tcount)
 
 	// returns and read lock released
 }

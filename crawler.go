@@ -83,6 +83,7 @@ func crawlTwistee(tw *Twistee) {
 		tw.status = statusCG
 		tw.statusTime = time.Now()
 	}
+	cs := tw.lastConnect
 	tw.rating = 0
 	tw.connectFails = 0
 	tw.lastConnect = time.Now()
@@ -100,14 +101,16 @@ func crawlTwistee(tw *Twistee) {
 	}
 
 	if config.verbose {
-		log.Printf("status - crawl done: twistee: %s newstatus: %v.%v received_addr: %v added_addr: %v CrawlTime: %s\n",
+		log.Printf("status - crawl done: twistee: %s s:r:f: %v:%v:%v addr: %v:%v CrawlTime: %s Last connect: %v ago\n",
 			net.JoinHostPort(tw.na.IP.String(),
 				strconv.Itoa(int(tw.na.Port))),
 			tw.status,
 			tw.rating,
+			tw.connectFails,
 			len(ras),
 			added,
-			time.Since(tw.crawlStart).String())
+			time.Since(tw.crawlStart).String(),
+			time.Since(cs).String())
 	}
 
 	// goroutine ends. deffered cleanup runs
@@ -137,7 +140,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 	}
 
 	defer conn.Close()
-	if config.verbose {
+	if config.debug {
 		log.Printf("%s - Connected to remote address. Last connect was %v ago\n", ip, time.Since(tw.lastConnect).String())
 	}
 
