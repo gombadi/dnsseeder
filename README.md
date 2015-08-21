@@ -5,6 +5,7 @@ This is a dns seeder for the [Twister P2P network](http://twister.net.co/)
 
 It is based on the original twister-seeder https://github.com/miguelfreitas/twister-seeder
 
+Also see the associated utility to display information about [non-standard ip addresses](https://github.com/gombadi/nonstd/)
 
 
 > **NOTE:** This repository is under ongoing development and
