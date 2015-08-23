@@ -47,24 +47,6 @@ type Seeder struct {
 	mtx     sync.RWMutex
 }
 
-// Twistee struct contains details on one twister client
-type Twistee struct {
-	na               *wire.NetAddress
-	lastConnect      time.Time
-	lastTry          time.Time
-	crawlStart       time.Time
-	statusTime       time.Time
-	crawlActive      bool
-	connectFails     uint32
-	clientVersion    int32
-	clientSubVersion string
-	statusStr        string
-	status           uint32 // rg,cg,wg,ng
-	rating           uint32 // if it reaches 100 then we ban them
-	nonstdIP         net.IP
-	dnsType          uint32
-}
-
 // initCrawlers needs to be run before the startCrawlers so it can get
 // a list of current ip addresses from the other seeders and therefore
 // start the crawl process
@@ -102,12 +84,10 @@ func (s *Seeder) startCrawlers() {
 	tcount := len(s.theList)
 	if tcount == 0 {
 		if config.debug {
-			log.Printf("debug - startCrawlers fail: no twistees available\n", tcount)
+			log.Printf("debug - startCrawlers fail: no twistees available\n")
 		}
 		return
 	}
-
-	// select the twistees to crawl up to max goroutines.
 
 	// struct to hold config options for each status
 	var crawlers = []struct {
@@ -195,12 +175,12 @@ func (s *Seeder) addNa(nNa *wire.NetAddress) bool {
 	}
 
 	nt := Twistee{
-		na:            nNa,
-		lastConnect:   time.Now(),
-		clientVersion: 0, // FIXME - need to get from the crawl somehow
-		status:        statusRG,
-		statusTime:    time.Now(),
-		dnsType:       DNSV4STD,
+		na:          nNa,
+		lastConnect: time.Now(),
+		version:     0,
+		status:      statusRG,
+		statusTime:  time.Now(),
+		dnsType:     DNSV4STD,
 	}
 
 	// select the dns type based on the remote address type and port

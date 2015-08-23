@@ -174,11 +174,18 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 		if config.debug {
 			log.Printf("%s - Remote version: %v\n", ip, msg.ProtocolVersion)
 		}
+		// fill the Twistee struct with the remote details
+		tw.version = msg.ProtocolVersion
+		tw.services = msg.Services
+		tw.lastBlock = msg.LastBlock
+		if tw.strVersion != msg.UserAgent {
+			// if the srtVersion is already the same then don't overwrite it.
+			// saves the GC having to cleanup a perfectly good string
+			tw.strVersion = msg.UserAgent
+		}
 	default:
 		return nil, &CrawlError{"Did not receive expected Version message from remote client", errors.New("")}
 	}
-
-	// FIXME - update twistee client version with what they just said
 
 	// send verack command
 	msgverack := wire.NewMsgVerAck()
@@ -222,7 +229,7 @@ func crawlIP(tw *Twistee) ([]*wire.NetAddress, *CrawlError) {
 		if msgaddr != nil {
 			switch msg := msgaddr.(type) {
 			case *wire.MsgAddr:
-				// received the addrt message so return the result
+				// received the addr message so return the result
 				if config.debug {
 					log.Printf("%s - received valid addr message\n", ip)
 				}
