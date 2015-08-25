@@ -17,7 +17,7 @@ const (
 	// nounce is used to check if we connect to ourselves
 	// as we don't listen we can use a fixed value
 	NOUNCE  = 0x0539a019ca550825
-	PVER    = 70003
+	PVER    = 60000
 	MINPORT = 0
 	MAXPORT = 65535
 
