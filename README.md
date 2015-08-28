@@ -40,6 +40,10 @@ The binary will then be available in ${HOME}/go/bin
 
 An easy way to run the program is with tmux or screen. This enables you to log out and leave the program running.
 
+If you want to be able to view the web interface then add -w <port> for the web server to listen on. If this is not provided then no web interface will be available. With the web site running you can then access the site by http://localhost:<port>/statusCG
+
+**NOTE -** For security reasons the web server will only listen on localhost so you will need to either use an ssh tunnel or proxy requests via a web server like Nginx or Apache.
+
 ```
 
 Command line Options:
@@ -47,7 +51,7 @@ Command line Options:
 -p port to listen on
 -d Produce debug output
 -v Produce verbose output
--v Produce stats output
+-w Port to listen on for Web Interface
 
 ```
 
