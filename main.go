@@ -18,6 +18,8 @@ import (
 type dnsseeder struct {
 	host    string
 	port    string
+	http    string
+	version string
 	verbose bool
 	debug   bool
 	stats   bool
@@ -25,14 +27,19 @@ type dnsseeder struct {
 }
 
 var config dnsseeder
+var counts twCounts
 
 func main() {
+
+	// FIXME - update with git hash during build
+	config.version = "0.5.0"
 
 	flag.StringVar(&config.host, "h", "", "DNS host to serve")
 	flag.StringVar(&config.port, "p", "8053", "Port to listen on")
 	flag.BoolVar(&config.verbose, "v", false, "Display verbose output")
 	flag.BoolVar(&config.debug, "d", false, "Display debug output")
 	flag.BoolVar(&config.stats, "s", false, "Display stats output")
+	flag.StringVar(&config.http, "w", "", "Web Port to listen on. No port specified & no web server running")
 	flag.Parse()
 
 	if config.host == "" {
@@ -53,7 +60,12 @@ func main() {
 		log.Printf("status - Running in quiet mode with limited output produced\n")
 	}
 
-	// FIXME - setup/make the data structures in Seeder
+	// start the web interface if we want it running
+	if config.http != "" {
+		go startHTTP(config.http)
+	}
+
+	// init the seeder
 	config.seeder = &Seeder{}
 	config.seeder.theList = make(map[string]*Twistee)
 	config.seeder.uptime = time.Now()

@@ -41,6 +41,18 @@ const (
 
 )
 
+type twCounts struct {
+	RG    uint32
+	RGS   uint32
+	CG    uint32
+	CGS   uint32
+	WG    uint32
+	WGS   uint32
+	NG    uint32
+	NGS   uint32
+	Total int
+	mtx   sync.RWMutex
+}
 type Seeder struct {
 	uptime  time.Time
 	theList map[string]*Twistee
@@ -138,6 +150,24 @@ func (s *Seeder) startCrawlers() {
 		}
 
 		log.Printf("stats - started crawler: %s total: %v started: %v\n", c.desc, c.totalCount, c.started)
+
+		counts.mtx.Lock()
+		switch c.status {
+		case statusRG:
+			counts.RG = c.totalCount
+			counts.RGS = c.started
+		case statusCG:
+			counts.CG = c.totalCount
+			counts.CGS = c.started
+		case statusWG:
+			counts.WG = c.totalCount
+			counts.WGS = c.started
+		case statusNG:
+			counts.NG = c.totalCount
+			counts.NGS = c.started
+		}
+		counts.Total = tcount
+		counts.mtx.Unlock()
 	}
 
 	log.Printf("stats - crawlers started. total twistees: %d\n", tcount)
