@@ -40,7 +40,7 @@ The binary will then be available in ${HOME}/go/bin
 
 An easy way to run the program is with tmux or screen. This enables you to log out and leave the program running.
 
-If you want to be able to view the web interface then add -w <port> for the web server to listen on. If this is not provided then no web interface will be available. With the web site running you can then access the site by http://localhost:<port>/statusCG
+If you want to be able to view the web interface then add -w port for the web server to listen on. If this is not provided then no web interface will be available. With the web site running you can then access the site by http://localhost:port/statusCG
 
 **NOTE -** For security reasons the web server will only listen on localhost so you will need to either use an ssh tunnel or proxy requests via a web server like Nginx or Apache.
 
@@ -65,6 +65,8 @@ LOGDIR=${HOME}/goseederlogs/
 
 mkdir -p ${LOGDIR}
 
+gzip ${LOGDIR}/*.log
+
 # pass through the logging level needed
 if [ -z ${1} ]; then
         LOGLV="-v"
@@ -76,7 +78,7 @@ cd
 echo
 echo "======= Run the Go Language dnsseed ======="
 echo
-${HOME}/go/bin/dnsseeder -h <host.to.serve> -p <port.to.listen.on> ${LOGLV} 2>&1 | tee ${LOGDIR}/$(date +%F-%s)-goseeder.log
+${HOME}/go/bin/dnsseeder -h <host.to.serve> -p <port.to.listen.on> ${LOGLV} -w 8880 2>&1 | tee ${LOGDIR}/$(date +%F-%s)-goseeder.log
 
 
 ```
