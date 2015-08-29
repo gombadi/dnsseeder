@@ -27,14 +27,14 @@ func getv6nonRR() []dns.RR { return latest.ipv6non }
 
 // updateDNS updates the current slices of dns.RR so incoming requests get a
 // fast answer
-func updateDNS(s *Seeder) {
+func updateDNS(s *dnsseeder) {
 
 	var rr4std, rr4non, rr6std, rr6non []dns.RR
 
 	s.mtx.RLock()
 
 	// loop over each dns recprd type we need
-	for t := range []int{DNSV4STD, DNSV4NON, DNSV6STD, DNSV6NON} {
+	for t := range []int{dnsV4Std, dnsV4Non, dnsV6Std, dnsV6Non} {
 
 		numRR := 0
 
@@ -48,8 +48,8 @@ func updateDNS(s *Seeder) {
 				continue
 			}
 
-			if t == DNSV4STD || t == DNSV4NON {
-				if t == DNSV4STD && tw.dnsType == DNSV4STD {
+			if t == dnsV4Std || t == dnsV4Non {
+				if t == dnsV4Std && tw.dnsType == dnsV4Std {
 					r := new(dns.A)
 					r.Hdr = dns.RR_Header{Name: config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
 					r.A = tw.na.IP
@@ -58,7 +58,7 @@ func updateDNS(s *Seeder) {
 				}
 
 				// if the twistee is using a non standard port then add the encoded port info to DNS
-				if t == DNSV4NON && tw.dnsType == DNSV4NON {
+				if t == dnsV4Non && tw.dnsType == dnsV4Non {
 					r := new(dns.A)
 					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
 					r.A = tw.na.IP
@@ -71,8 +71,8 @@ func updateDNS(s *Seeder) {
 					numRR++
 				}
 			}
-			if t == DNSV6STD || t == DNSV6NON {
-				if t == DNSV6STD && tw.dnsType == DNSV6STD {
+			if t == dnsV6Std || t == dnsV6Non {
+				if t == dnsV6Std && tw.dnsType == dnsV6Std {
 					r := new(dns.AAAA)
 					r.Hdr = dns.RR_Header{Name: config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 60}
 					r.AAAA = tw.na.IP
@@ -80,7 +80,7 @@ func updateDNS(s *Seeder) {
 					numRR++
 				}
 				// if the twistee is using a non standard port then add the encoded port info to DNS
-				if t == DNSV6NON && tw.dnsType == DNSV6NON {
+				if t == dnsV6Non && tw.dnsType == dnsV6Non {
 					r := new(dns.AAAA)
 					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 60}
 					r.AAAA = tw.na.IP
@@ -102,15 +102,15 @@ func updateDNS(s *Seeder) {
 
 	latest.mtx.Lock()
 
-	for t := range []int{DNSV4STD, DNSV4NON, DNSV6STD, DNSV6NON} {
+	for t := range []int{dnsV4Std, dnsV4Non, dnsV6Std, dnsV6Non} {
 		switch t {
-		case DNSV4STD:
+		case dnsV4Std:
 			latest.ipv4std = rr4std
-		case DNSV4NON:
+		case dnsV4Non:
 			latest.ipv4non = rr4non
-		case DNSV6STD:
+		case dnsV6Std:
 			latest.ipv6std = rr6std
-		case DNSV6NON:
+		case dnsV6Non:
 			latest.ipv6non = rr6non
 		}
 	}

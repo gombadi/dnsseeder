@@ -15,7 +15,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-type dnsseeder struct {
+type configData struct {
 	host    string
 	port    string
 	http    string
@@ -23,10 +23,10 @@ type dnsseeder struct {
 	verbose bool
 	debug   bool
 	stats   bool
-	seeder  *Seeder
+	seeder  *dnsseeder
 }
 
-var config dnsseeder
+var config configData
 var counts twCounts
 
 func main() {
@@ -66,8 +66,8 @@ func main() {
 	}
 
 	// init the seeder
-	config.seeder = &Seeder{}
-	config.seeder.theList = make(map[string]*Twistee)
+	config.seeder = &dnsseeder{}
+	config.seeder.theList = make(map[string]*twistee)
 	config.seeder.uptime = time.Now()
 
 	// start dns server

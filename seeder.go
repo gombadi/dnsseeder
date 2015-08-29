@@ -12,26 +12,25 @@ import (
 
 const (
 
-	// Twister Magic number to make it incompatible with the Bitcoin network
-	TWISTNET = 0xd2bbdaf0
-	// nounce is used to check if we connect to ourselves
+	// TWISTNET Magic number to make it incompatible with the Bitcoin network
+	twistNet = 0xd2bbdaf0
+	// NOUNCE is used to check if we connect to ourselves
 	// as we don't listen we can use a fixed value
-	NOUNCE  = 0x0539a019ca550825
-	PVER    = 60000
-	MINPORT = 0
-	MAXPORT = 65535
+	nounce  = 0x0539a019ca550825
+	pver    = 60000
+	minPort = 0
+	maxPort = 65535
 
-	TWSTDPORT = 28333 // standard port twister listens on
+	twStdPort = 28333 // standard port twister listens on
 
-	MAXFAILS = 58 // max number of connect fails before we delete a twistee. Just over 24 hours(checked every 33 minutes)
+	maxFails = 58 // max number of connect fails before we delete a twistee. Just over 24 hours(checked every 33 minutes)
 
-	MAXTO = 250 // max seconds (4min 10 sec) for all comms to twistee to complete before we timeout
+	maxTo = 250 // max seconds (4min 10 sec) for all comms to twistee to complete before we timeout
 
-	// DNS Type. Is this twistee using v4/v6 and standard or non standard ports
-	DNSV4STD = 1
-	DNSV4NON = 2
-	DNSV6STD = 3
-	DNSV6NON = 4
+	dnsV4Std = 1
+	dnsV4Non = 2
+	dnsV6Std = 3
+	dnsV6Non = 4
 
 	// twistee status
 	statusRG = 1 // reported good status. A remote twistee has reported this ip but we have not connected
@@ -53,9 +52,10 @@ type twCounts struct {
 	Total int
 	mtx   sync.RWMutex
 }
-type Seeder struct {
+
+type dnsseeder struct {
 	uptime  time.Time
-	theList map[string]*Twistee
+	theList map[string]*twistee
 	mtx     sync.RWMutex
 }
 
@@ -91,7 +91,7 @@ func initCrawlers() {
 
 // startCrawlers is called on a time basis to start maxcrawlers new
 // goroutines if there are spare goroutine slots available
-func (s *Seeder) startCrawlers() {
+func (s *dnsseeder) startCrawlers() {
 
 	tcount := len(s.theList)
 	if tcount == 0 {
@@ -176,7 +176,7 @@ func (s *Seeder) startCrawlers() {
 }
 
 // isDup will return true or false depending if the ip exists in theList
-func (s *Seeder) isDup(ipport string) bool {
+func (s *dnsseeder) isDup(ipport string) bool {
 	s.mtx.RLock()
 	_, dup := s.theList[ipport]
 	s.mtx.RUnlock()
@@ -184,17 +184,17 @@ func (s *Seeder) isDup(ipport string) bool {
 }
 
 // isNaDup returns true if this wire.NetAddress is already known to us
-func (s *Seeder) isNaDup(na *wire.NetAddress) bool {
+func (s *dnsseeder) isNaDup(na *wire.NetAddress) bool {
 	return s.isDup(net.JoinHostPort(na.IP.String(), strconv.Itoa(int(na.Port))))
 }
 
 // addNa validates and adds a network address to theList
-func (s *Seeder) addNa(nNa *wire.NetAddress) bool {
+func (s *dnsseeder) addNa(nNa *wire.NetAddress) bool {
 
 	if dup := s.isNaDup(nNa); dup == true {
 		return false
 	}
-	if nNa.Port <= MINPORT || nNa.Port >= MAXPORT {
+	if nNa.Port <= minPort || nNa.Port >= maxPort {
 		return false
 	}
 
@@ -204,31 +204,31 @@ func (s *Seeder) addNa(nNa *wire.NetAddress) bool {
 		return false
 	}
 
-	nt := Twistee{
+	nt := twistee{
 		na:          nNa,
 		lastConnect: time.Now(),
 		version:     0,
 		status:      statusRG,
 		statusTime:  time.Now(),
-		dnsType:     DNSV4STD,
+		dnsType:     dnsV4Std,
 	}
 
 	// select the dns type based on the remote address type and port
 	if x := nt.na.IP.To4(); x == nil {
 		// not ipv4
-		if nNa.Port != TWSTDPORT {
-			nt.dnsType = DNSV6NON
+		if nNa.Port != twStdPort {
+			nt.dnsType = dnsV6Non
 
 			// produce the nonstdIP
 			nt.nonstdIP = getNonStdIP(nt.na.IP, nt.na.Port)
 
 		} else {
-			nt.dnsType = DNSV6STD
+			nt.dnsType = dnsV6Std
 		}
 	} else {
 		// ipv4
-		if nNa.Port != TWSTDPORT {
-			nt.dnsType = DNSV4NON
+		if nNa.Port != twStdPort {
+			nt.dnsType = dnsV4Non
 
 			// force ipv4 address into a 4 byte buffer
 			nt.na.IP = nt.na.IP.To4()
@@ -284,7 +284,7 @@ func crc16(bs []byte) uint16 {
 	return crc
 }
 
-func (s *Seeder) auditTwistees() {
+func (s *dnsseeder) auditTwistees() {
 
 	c := 0
 	log.Printf("status - Audit start. System Uptime: %s\n", time.Since(s.uptime).String())
@@ -318,7 +318,7 @@ func (s *Seeder) auditTwistees() {
 		}
 
 		// last audit task is to remove twistees that we can not connect to
-		if tw.status == statusNG && tw.connectFails > MAXFAILS {
+		if tw.status == statusNG && tw.connectFails > maxFails {
 			if config.verbose {
 				log.Printf("status - purging twistee %s after %v failed connections\n", k, tw.connectFails)
 			}
@@ -338,7 +338,7 @@ func (s *Seeder) auditTwistees() {
 }
 
 // teatload loads the dns records with time based test data
-func (s *Seeder) loadDNS() {
+func (s *dnsseeder) loadDNS() {
 
 	updateDNS(s)
 }

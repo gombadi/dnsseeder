@@ -8,7 +8,7 @@ import (
 )
 
 // Twistee struct contains details on one twister client
-type Twistee struct {
+type twistee struct {
 	na           *wire.NetAddress
 	lastConnect  time.Time
 	lastTry      time.Time
@@ -28,7 +28,7 @@ type Twistee struct {
 }
 
 // status2str will return the string description of the status
-func (tw Twistee) status2str() string {
+func (tw twistee) status2str() string {
 	switch tw.status {
 	case statusRG:
 		return "statusRG"
@@ -44,15 +44,15 @@ func (tw Twistee) status2str() string {
 }
 
 // dns2str will return the string description of the dns type
-func (tw Twistee) dns2str() string {
+func (tw twistee) dns2str() string {
 	switch tw.dnsType {
-	case DNSV4STD:
+	case dnsV4Std:
 		return "v4 standard port"
-	case DNSV4NON:
+	case dnsV4Non:
 		return "v4 non-standard port"
-	case DNSV6STD:
+	case dnsV6Std:
 		return "v6 standard port"
-	case DNSV6NON:
+	case dnsV6Non:
 		return "v6 non-standard port"
 	default:
 		return "Unknown DNS Type"
