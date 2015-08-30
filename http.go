@@ -212,13 +212,13 @@ func statusHandler(w http.ResponseWriter, r *http.Request, status uint32) {
 
 		switch status {
 		case statusRG:
-			fmt.Fprintf(w, "<center><b>Twistee Status: statusRG</b></center>")
+			fmt.Fprintf(w, "<center><b>Twistee Status: statusRG - (Reported Good) Have not been able to get addresses yet</b></center>")
 		case statusCG:
-			fmt.Fprintf(w, "<center><b>Twistee Status: statusCG</b></center>")
+			fmt.Fprintf(w, "<center><b>Twistee Status: statusCG - (Currently Good) Able to connect and get addresses</b></center>")
 		case statusWG:
-			fmt.Fprintf(w, "<center><b>Twistee Status: statusWG</b></center>")
+			fmt.Fprintf(w, "<center><b>Twistee Status: statusWG - (Was Good) Was Ok but now can not get addresses</b></center>")
 		case statusNG:
-			fmt.Fprintf(w, "<center><b>Twistee Status: statusNG</b></center>")
+			fmt.Fprintf(w, "<center><b>Twistee Status: statusNG - (No Good) Unable to get addresses</b></center>")
 		}
 		t := template.New("Status template")
 		t, err := t.Parse(st)
