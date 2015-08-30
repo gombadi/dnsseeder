@@ -9,12 +9,22 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
 	"github.com/miekg/dns"
 )
 
+// twCounts holds various statistics about the running system
+type twCounts struct {
+	TwStatus  []uint32
+	TwStarts  []uint32
+	DNSCounts []uint32
+	mtx       sync.RWMutex
+}
+
+// configData holds information on the application
 type configData struct {
 	host    string
 	port    string
@@ -33,6 +43,11 @@ func main() {
 
 	// FIXME - update with git hash during build
 	config.version = "0.5.0"
+
+	// initialize the stats counters
+	counts.TwStatus = make([]uint32, maxStatusTypes)
+	counts.TwStarts = make([]uint32, maxStatusTypes)
+	counts.DNSCounts = make([]uint32, maxDNSTypes)
 
 	flag.StringVar(&config.host, "h", "", "DNS host to serve")
 	flag.StringVar(&config.port, "p", "8053", "Port to listen on")
@@ -115,6 +130,23 @@ func main() {
 	}
 	// FIXME - call dns server.Shutdown()
 	fmt.Printf("\nProgram exiting. Bye\n")
+}
+
+// updateTwCounts runs in a goroutine and updates the global stats with the lates
+// counts from a startCrawlers run
+func updateTwCounts(status, total, started uint32) {
+	// update the stats counters
+	counts.mtx.Lock()
+	counts.TwStatus[status] = total
+	counts.TwStarts[status] = started
+	counts.mtx.Unlock()
+}
+
+// updateDNSCounts runs in a goroutine and updates the global stats for the number of DNS requests
+func updateDNSCounts(dnsType uint32) {
+	counts.mtx.Lock()
+	counts.DNSCounts[dnsType]++
+	counts.mtx.Unlock()
 }
 
 /*

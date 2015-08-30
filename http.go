@@ -390,6 +390,43 @@ func generateWebStatus(status uint32) (ws []webstatus) {
 
 // genHeader will output the standard header
 func writeHeader(w http.ResponseWriter, r *http.Request) {
+
+	var hc struct {
+		RG       uint32
+		RGS      uint32
+		CG       uint32
+		CGS      uint32
+		WG       uint32
+		WGS      uint32
+		NG       uint32
+		NGS      uint32
+		Total    uint32
+		V4Std    uint32
+		V4Non    uint32
+		V6Std    uint32
+		V6Non    uint32
+		DNSTotal uint32
+	}
+
+	// fill the structs so they can be displayed via the template
+	counts.mtx.RLock()
+	hc.RG = counts.TwStatus[statusRG]
+	hc.RGS = counts.TwStarts[statusRG]
+	hc.CG = counts.TwStatus[statusCG]
+	hc.CGS = counts.TwStarts[statusCG]
+	hc.WG = counts.TwStatus[statusWG]
+	hc.WGS = counts.TwStarts[statusWG]
+	hc.NG = counts.TwStatus[statusNG]
+	hc.NGS = counts.TwStarts[statusNG]
+	hc.Total = hc.RG + hc.CG + hc.WG + hc.NG
+
+	hc.V4Std = counts.DNSCounts[dnsV4Std]
+	hc.V4Non = counts.DNSCounts[dnsV4Non]
+	hc.V6Std = counts.DNSCounts[dnsV6Std]
+	hc.V6Non = counts.DNSCounts[dnsV6Non]
+	hc.DNSTotal = hc.V4Std + hc.V4Non + hc.V6Std + hc.V6Non
+	counts.mtx.RUnlock()
+
 	// we are using basic and simple html here. No fancy graphics or css
 	h := `
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
@@ -401,22 +438,28 @@ func writeHeader(w http.ResponseWriter, r *http.Request) {
 	<a href="/statusNG">statusNG</a>   
 	<a href="/dns">DNS</a>
     <br>
-    Current Stats (count/started) 
+    <table><tr><td>
+    Twistee Stats (count/started)<br>
     <table border=1><tr>
-    <td>RG: {{.RG}}/{{.RGS}}</td><td>CG: {{.CG}}/{{.CGS}}</td><td>WG: {{.WG}}/{{.WGS}}</td><td>NG: {{.NG}}/{{.NGS}}</td><td>Total: {{.Total}}</td>
+	<td>RG: {{.RG}}/{{.RGS}}</td><td>CG: {{.CG}}/{{.CGS}}</td><td>WG: {{.WG}}/{{.WGS}}</td><td>NG: {{.NG}}/{{.NGS}}</td><td>Total: {{.Total}}</td>
     </tr></table>
+    </td><td>
+    DNS Requests<br>
+    <table border=1><tr>
+	<td>V4 Std: {{.V4Std}}</td><td>V4 Non: {{.V4Non}}</td><td>V6 Std: {{.V6Std}}</td><td>V6 Non: {{.V6Non}}</td><td>Total: {{.DNSTotal}}</td>
+    </tr></table>
+    </td></tr></table>
 	</center>
 	<hr>
 	`
+
 	t := template.New("Header template")
 	t, err := t.Parse(h)
 	if err != nil {
 		log.Printf("error parsing template %v\n", err)
 	}
 
-	counts.mtx.RLock()
-	err = t.Execute(w, counts)
-	counts.mtx.RUnlock()
+	err = t.Execute(w, hc)
 	if err != nil {
 		log.Printf("error executing template %v\n", err)
 	}

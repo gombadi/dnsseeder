@@ -141,21 +141,24 @@ func handleDNSStd(w dns.ResponseWriter, r *dns.Msg) {
 		m.Answer = getv4stdRR()
 		latest.mtx.RUnlock()
 		qtype = "A"
+		// start a goroutine to update the global counters then get back to answering this request
+		go updateDNSCounts(dnsV4Std)
 	case dns.TypeAAAA:
 		latest.mtx.RLock()
 		m.Answer = getv6stdRR()
 		latest.mtx.RUnlock()
 		qtype = "AAAA"
+		go updateDNSCounts(dnsV6Std)
 	default:
 		// return no answer to all other queries
 
 	}
+
+	w.WriteMsg(m)
+
 	if config.verbose {
 		log.Printf("status - DNS response Type: standard  To IP: %s  Query Type: %s\n", w.RemoteAddr().String(), qtype)
 	}
-
-	// FIXME - add stats and query counts
-	w.WriteMsg(m)
 }
 
 // handleDNSNon processes a DNS request from remote client and returns
@@ -177,21 +180,24 @@ func handleDNSNon(w dns.ResponseWriter, r *dns.Msg) {
 		m.Answer = getv4nonRR()
 		latest.mtx.RUnlock()
 		qtype = "A"
+		// start a goroutine to update the global counters then get back to answering this request
+		go updateDNSCounts(dnsV4Non)
 	case dns.TypeAAAA:
 		latest.mtx.RLock()
 		m.Answer = getv6nonRR()
 		latest.mtx.RUnlock()
 		qtype = "AAAA"
+		go updateDNSCounts(dnsV6Non)
 	default:
 		// return no answer to all other queries
 
 	}
+
+	w.WriteMsg(m)
+
 	if config.verbose {
 		log.Printf("status - DNS response Type: non-standard  To IP: %s  Query Type: %s\n", w.RemoteAddr().String(), qtype)
 	}
-
-	// FIXME - add stats and query counts
-	w.WriteMsg(m)
 }
 
 // serve starts the requested DNS server listening on the requested port

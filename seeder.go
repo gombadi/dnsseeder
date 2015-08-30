@@ -27,31 +27,20 @@ const (
 
 	maxTo = 250 // max seconds (4min 10 sec) for all comms to twistee to complete before we timeout
 
-	dnsV4Std = 1
-	dnsV4Non = 2
-	dnsV6Std = 3
-	dnsV6Non = 4
+	dnsInvalid  = 0
+	dnsV4Std    = 1
+	dnsV4Non    = 2
+	dnsV6Std    = 3
+	dnsV6Non    = 4
+	maxDNSTypes = 5
 
 	// twistee status
-	statusRG = 1 // reported good status. A remote twistee has reported this ip but we have not connected
-	statusCG = 2 // confirmed good. We have connected to the twistee and received addresses
-	statusWG = 3 // was good. Twistee was confirmed good but now having problems
-	statusNG = 4 // no good. Will be removed from theList after 24 hours to redure bouncing ip addresses
-
+	statusRG       = 1 // reported good status. A remote twistee has reported this ip but we have not connected
+	statusCG       = 2 // confirmed good. We have connected to the twistee and received addresses
+	statusWG       = 3 // was good. Twistee was confirmed good but now having problems
+	statusNG       = 4 // no good. Will be removed from theList after 24 hours to redure bouncing ip addresses
+	maxStatusTypes = 5
 )
-
-type twCounts struct {
-	RG    uint32
-	RGS   uint32
-	CG    uint32
-	CGS   uint32
-	WG    uint32
-	WGS   uint32
-	NG    uint32
-	NGS   uint32
-	Total int
-	mtx   sync.RWMutex
-}
 
 type dnsseeder struct {
 	uptime  time.Time
@@ -144,30 +133,16 @@ func (s *dnsseeder) startCrawlers() {
 				continue
 			}
 
-			// all looks go so start a go routine to crawl the remote twistee
+			// all looks good so start a go routine to crawl the remote twistee
 			go crawlTwistee(tw)
 			c.started++
 		}
 
 		log.Printf("stats - started crawler: %s total: %v started: %v\n", c.desc, c.totalCount, c.started)
 
-		counts.mtx.Lock()
-		switch c.status {
-		case statusRG:
-			counts.RG = c.totalCount
-			counts.RGS = c.started
-		case statusCG:
-			counts.CG = c.totalCount
-			counts.CGS = c.started
-		case statusWG:
-			counts.WG = c.totalCount
-			counts.WGS = c.started
-		case statusNG:
-			counts.NG = c.totalCount
-			counts.NGS = c.started
-		}
-		counts.Total = tcount
-		counts.mtx.Unlock()
+		// update the global stats in another goroutine to free the main goroutine
+		// for other work
+		go updateTwCounts(c.status, c.totalCount, c.started)
 	}
 
 	log.Printf("stats - crawlers started. total twistees: %d\n", tcount)
