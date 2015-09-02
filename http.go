@@ -231,9 +231,7 @@ func statusHandler(w http.ResponseWriter, r *http.Request, status uint32) {
 		}
 
 	}
-
 	writeFooter(w, r, startT)
-
 }
 
 // copy Twistee details into a template friendly struct

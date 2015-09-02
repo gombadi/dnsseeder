@@ -22,7 +22,7 @@ func (e *crawlError) Error() string {
 
 // crawlTwistee runs in a goroutine, crawls the remote ip and updates the master
 // list of currently active addresses
-func crawlTwistee(tw *twistee) {
+func crawlTwistee(s *dnsseeder, tw *twistee) {
 
 	tw.crawlActive = true
 	tw.crawlStart = time.Now()
@@ -39,7 +39,7 @@ func crawlTwistee(tw *twistee) {
 	}
 
 	// connect to the remote ip and ask them for their addr list
-	ras, e := crawlIP(tw)
+	rna, e := crawlIP(s.net.pver, s.net.id, tw)
 
 	if e != nil {
 		// update the fact that we have not connected to this twistee
@@ -50,9 +50,15 @@ func crawlTwistee(tw *twistee) {
 		// update the status of this failed twistee
 		switch tw.status {
 		case statusRG:
-			if tw.rating += 25; tw.rating > 30 {
-				tw.status = statusWG
+			// if we are full then any RG failures will skip directly to NG
+			if s.isFull() {
+				tw.status = statusNG // not able to connect to this twistee so ignore
 				tw.statusTime = time.Now()
+			} else {
+				if tw.rating += 25; tw.rating > 30 {
+					tw.status = statusWG
+					tw.statusTime = time.Now()
+				}
 			}
 		case statusCG:
 			if tw.rating += 25; tw.rating >= 50 {
@@ -60,7 +66,7 @@ func crawlTwistee(tw *twistee) {
 				tw.statusTime = time.Now()
 			}
 		case statusWG:
-			if tw.rating += 30; tw.rating >= 100 {
+			if tw.rating += 15; tw.rating >= 100 {
 				tw.status = statusNG // not able to connect to this twistee so ignore
 				tw.statusTime = time.Now()
 			}
@@ -93,11 +99,14 @@ func crawlTwistee(tw *twistee) {
 
 	added := 0
 
-	// loop through all the received network addresses and add to thelist if not present
-	for _, na := range ras {
-		// a new network address so add to the system
-		if x := config.seeder.addNa(na); x == true {
-			added++
+	// if we are full then skip adding more possible clients
+	if s.isFull() == false {
+		// loop through all the received network addresses and add to thelist if not present
+		for _, na := range rna {
+			// a new network address so add to the system
+			if x := s.addNa(na); x == true {
+				added++
+			}
 		}
 	}
 
@@ -108,7 +117,7 @@ func crawlTwistee(tw *twistee) {
 			tw.status,
 			tw.rating,
 			tw.connectFails,
-			len(ras),
+			len(rna),
 			added,
 			time.Since(tw.crawlStart).String(),
 			time.Since(cs).String())
@@ -125,7 +134,7 @@ func crawlEnd(tw *twistee) {
 }
 
 // crawlIP retrievs a slice of ip addresses from a client
-func crawlIP(tw *twistee) ([]*wire.NetAddress, *crawlError) {
+func crawlIP(pver uint32, netID wire.BitcoinNet, tw *twistee) ([]*wire.NetAddress, *crawlError) {
 
 	ip := tw.na.IP.String()
 	port := strconv.Itoa(int(tw.na.Port))
@@ -155,14 +164,14 @@ func crawlIP(tw *twistee) ([]*wire.NetAddress, *crawlError) {
 		return nil, &crawlError{"Create NewMsgVersionFromConn", err}
 	}
 
-	err = wire.WriteMessage(conn, msgver, pver, twistNet)
+	err = wire.WriteMessage(conn, msgver, pver, netID)
 	if err != nil {
 		// Log and handle the error
 		return nil, &crawlError{"Write Version Message", err}
 	}
 
 	// first message received should be version
-	msg, _, err := wire.ReadMessage(conn, pver, twistNet)
+	msg, _, err := wire.ReadMessage(conn, pver, netID)
 	if err != nil {
 		// Log and handle the error
 		return nil, &crawlError{"Read message after sending Version", err}
@@ -190,13 +199,13 @@ func crawlIP(tw *twistee) ([]*wire.NetAddress, *crawlError) {
 	// send verack command
 	msgverack := wire.NewMsgVerAck()
 
-	err = wire.WriteMessage(conn, msgverack, pver, twistNet)
+	err = wire.WriteMessage(conn, msgverack, pver, netID)
 	if err != nil {
 		return nil, &crawlError{"writing message VerAck", err}
 	}
 
 	// second message received should be verack
-	msg, _, err = wire.ReadMessage(conn, pver, twistNet)
+	msg, _, err = wire.ReadMessage(conn, pver, netID)
 	if err != nil {
 		return nil, &crawlError{"reading expected Ver Ack from remote client", err}
 	}
@@ -213,7 +222,7 @@ func crawlIP(tw *twistee) ([]*wire.NetAddress, *crawlError) {
 	// send getaddr command
 	msgGetAddr := wire.NewMsgGetAddr()
 
-	err = wire.WriteMessage(conn, msgGetAddr, pver, twistNet)
+	err = wire.WriteMessage(conn, msgGetAddr, pver, netID)
 	if err != nil {
 		return nil, &crawlError{"writing Addr message to remote client", err}
 	}
@@ -225,7 +234,7 @@ func crawlIP(tw *twistee) ([]*wire.NetAddress, *crawlError) {
 		// Using the Bitcoin lib for the Twister Net means it does not understand some
 		// of the commands and will error. We can ignore these as we are only
 		// interested in the addr message and its content.
-		msgaddr, _, _ := wire.ReadMessage(conn, pver, twistNet)
+		msgaddr, _, _ := wire.ReadMessage(conn, pver, netID)
 		if msgaddr != nil {
 			switch msg := msgaddr.(type) {
 			case *wire.MsgAddr:

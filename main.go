@@ -38,28 +38,47 @@ type configData struct {
 
 var config configData
 var counts twCounts
+var nwname string
 
 func main() {
 
 	// FIXME - update with git hash during build
-	config.version = "0.5.0"
+	config.version = "0.6.0"
 
 	// initialize the stats counters
 	counts.TwStatus = make([]uint32, maxStatusTypes)
 	counts.TwStarts = make([]uint32, maxStatusTypes)
 	counts.DNSCounts = make([]uint32, maxDNSTypes)
 
+	flag.StringVar(&nwname, "net", "", "Preconfigured Network config")
 	flag.StringVar(&config.host, "h", "", "DNS host to serve")
-	flag.StringVar(&config.port, "p", "8053", "Port to listen on")
+	flag.StringVar(&config.port, "p", "8053", "DNS Port to listen on")
+	flag.StringVar(&config.http, "w", "", "Web Port to listen on. No port specified & no web server running")
 	flag.BoolVar(&config.verbose, "v", false, "Display verbose output")
 	flag.BoolVar(&config.debug, "d", false, "Display debug output")
 	flag.BoolVar(&config.stats, "s", false, "Display stats output")
-	flag.StringVar(&config.http, "w", "", "Web Port to listen on. No port specified & no web server running")
 	flag.Parse()
 
 	if config.host == "" {
-		log.Fatalf("error - no hostname provided\n")
+		fmt.Printf("error - no hostname provided\n")
+		os.Exit(1)
 	}
+
+	// configure the network options so we can start crawling
+	thenet := selectNetwork(nwname)
+	if thenet == nil {
+		fmt.Printf("Error - No valid network specified. Please add -net=<network> from one of the following:\n")
+		for _, n := range getNetworkNames() {
+			fmt.Printf("%s\n", n)
+		}
+		os.Exit(1)
+	}
+
+	// init the seeder
+	config.seeder = &dnsseeder{}
+	config.seeder.theList = make(map[string]*twistee)
+	config.seeder.uptime = time.Now()
+	config.seeder.net = thenet
 
 	if config.debug == true {
 		config.verbose = true
@@ -73,18 +92,14 @@ func main() {
 
 	if config.verbose == false {
 		log.Printf("status - Running in quiet mode with limited output produced\n")
+	} else {
+		log.Printf("status - system is configured for %s\n", config.seeder.net.name)
 	}
 
 	// start the web interface if we want it running
 	if config.http != "" {
 		go startHTTP(config.http)
 	}
-
-	// init the seeder
-	config.seeder = &dnsseeder{}
-	config.seeder.theList = make(map[string]*twistee)
-	config.seeder.uptime = time.Now()
-
 	// start dns server
 	dns.HandleFunc("nonstd."+config.host, handleDNSNon)
 	dns.HandleFunc(config.host, handleDNSStd)
@@ -92,7 +107,7 @@ func main() {
 	//go serve("tcp", config.port)
 
 	// seed the seeder with some ip addresses
-	initCrawlers()
+	config.seeder.initCrawlers()
 	// start first crawl
 	config.seeder.startCrawlers()
 
@@ -100,11 +115,11 @@ func main() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
 	// extract good dns records from all twistees on regular basis
-	dnsChan := time.NewTicker(time.Second * 57).C
+	dnsChan := time.NewTicker(time.Second * dnsDelay).C
 	// used to start crawlers on a regular basis
-	crawlChan := time.NewTicker(time.Second * 22).C
+	crawlChan := time.NewTicker(time.Second * crawlDelay).C
 	// used to remove old statusNG twistees that have reached fail count
-	auditChan := time.NewTicker(time.Hour * 1).C
+	auditChan := time.NewTicker(time.Minute * auditDelay).C
 
 	dowhile := true
 	for dowhile == true {
@@ -115,7 +130,7 @@ func main() {
 			if config.debug {
 				log.Printf("debug - Audit twistees timer triggered\n")
 			}
-			config.seeder.auditTwistees()
+			config.seeder.auditClients()
 		case <-dnsChan:
 			if config.debug {
 				log.Printf("debug - DNS - Updating latest ip addresses timer triggered\n")

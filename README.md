@@ -1,14 +1,12 @@
 # dnsseeder
-Go Language dns seeder for the Twister P2P network
-
-This is a dns seeder for the [Twister P2P network](http://twister.net.co/)
+Go Language dns seeder for Networks that use Bitcoin technology such as the [Twister P2P network](http://twister.net.co/)
 
 It is based on the original twister-seeder https://github.com/miguelfreitas/twister-seeder
 
+This codebase can now seed different networks. At the moment it supports Twister and Bitcoin networks. These are configured in network.go and selected at runtime with -net command line option.
+
 Also see the associated utility to display information about [non-standard ip addresses](https://github.com/gombadi/nonstd/)
 
-
-> **NOTE:** This repository is under ongoing development. Stable releases have been tagged and should be used for production systems.
 
 
 ## Installing
@@ -36,7 +34,7 @@ The binary will then be available in ${HOME}/go/bin
 
 ## Usage
 
-    $ dnsseeder -h <domain respond to>
+    $ dnsseeder -h <domain respond to> -net <network to seed>
 
 An easy way to run the program is with tmux or screen. This enables you to log out and leave the program running.
 
@@ -48,7 +46,8 @@ If you want to be able to view the web interface then add -w port for the web se
 
 Command line Options:
 -h hostname to serve 
--p port to listen on
+-net The network to seed. Currently twister, bitcoin, bitcoin-test
+-p port to listen on for DNS requests
 -d Produce debug output
 -v Produce verbose output
 -w Port to listen on for Web Interface
@@ -69,16 +68,16 @@ gzip ${LOGDIR}/*.log
 
 # pass through the logging level needed
 if [ -z ${1} ]; then
-        LOGLV="-v"
+        THENET="twister"
 else
-        LOGLV="${1}"
+        THENET="${1}"
 fi
 
 cd
 echo
 echo "======= Run the Go Language dnsseed ======="
 echo
-${HOME}/go/bin/dnsseeder -h <host.to.serve> -p <port.to.listen.on> ${LOGLV} -w 8880 2>&1 | tee ${LOGDIR}/$(date +%F-%s)-goseeder.log
+${HOME}/go/bin/dnsseeder -h <host.to.serve> -p <dns.port.to.listen.on> ${THENET -v} -w 8880 2>&1 | tee ${LOGDIR}/$(date +%F-%s)-goseeder.log
 
 
 ```

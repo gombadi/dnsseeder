@@ -51,7 +51,7 @@ func updateDNS(s *dnsseeder) {
 			if t == dnsV4Std || t == dnsV4Non {
 				if t == dnsV4Std && tw.dnsType == dnsV4Std {
 					r := new(dns.A)
-					r.Hdr = dns.RR_Header{Name: config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
+					r.Hdr = dns.RR_Header{Name: config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: s.net.ttl}
 					r.A = tw.na.IP
 					rr4std = append(rr4std, r)
 					numRR++
@@ -60,12 +60,12 @@ func updateDNS(s *dnsseeder) {
 				// if the twistee is using a non standard port then add the encoded port info to DNS
 				if t == dnsV4Non && tw.dnsType == dnsV4Non {
 					r := new(dns.A)
-					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
+					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: s.net.ttl}
 					r.A = tw.na.IP
 					rr4non = append(rr4non, r)
 					numRR++
 					r = new(dns.A)
-					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: 60}
+					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeA, Class: dns.ClassINET, Ttl: s.net.ttl}
 					r.A = tw.nonstdIP
 					rr4non = append(rr4non, r)
 					numRR++
@@ -74,7 +74,7 @@ func updateDNS(s *dnsseeder) {
 			if t == dnsV6Std || t == dnsV6Non {
 				if t == dnsV6Std && tw.dnsType == dnsV6Std {
 					r := new(dns.AAAA)
-					r.Hdr = dns.RR_Header{Name: config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 60}
+					r.Hdr = dns.RR_Header{Name: config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: s.net.ttl}
 					r.AAAA = tw.na.IP
 					rr6std = append(rr6std, r)
 					numRR++
@@ -82,12 +82,12 @@ func updateDNS(s *dnsseeder) {
 				// if the twistee is using a non standard port then add the encoded port info to DNS
 				if t == dnsV6Non && tw.dnsType == dnsV6Non {
 					r := new(dns.AAAA)
-					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 60}
+					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: s.net.ttl}
 					r.AAAA = tw.na.IP
 					rr6non = append(rr6non, r)
 					numRR++
 					r = new(dns.AAAA)
-					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: 60}
+					r.Hdr = dns.RR_Header{Name: "nonstd." + config.host + ".", Rrtype: dns.TypeAAAA, Class: dns.ClassINET, Ttl: s.net.ttl}
 					r.AAAA = tw.nonstdIP
 					rr6non = append(rr6non, r)
 					numRR++
@@ -156,8 +156,8 @@ func handleDNSStd(w dns.ResponseWriter, r *dns.Msg) {
 
 	w.WriteMsg(m)
 
-	if config.verbose {
-		log.Printf("status - DNS response Type: standard  To IP: %s  Query Type: %s\n", w.RemoteAddr().String(), qtype)
+	if config.debug {
+		log.Printf("debug - DNS response Type: standard  To IP: %s  Query Type: %s\n", w.RemoteAddr().String(), qtype)
 	}
 }
 
@@ -195,8 +195,8 @@ func handleDNSNon(w dns.ResponseWriter, r *dns.Msg) {
 
 	w.WriteMsg(m)
 
-	if config.verbose {
-		log.Printf("status - DNS response Type: non-standard  To IP: %s  Query Type: %s\n", w.RemoteAddr().String(), qtype)
+	if config.debug {
+		log.Printf("debug - DNS response Type: non-standard  To IP: %s  Query Type: %s\n", w.RemoteAddr().String(), qtype)
 	}
 }
 
