@@ -77,7 +77,7 @@ cd
 echo
 echo "======= Run the Go Language dnsseed ======="
 echo
-${HOME}/go/bin/dnsseeder -h <host.to.serve> -p <dns.port.to.listen.on> ${THENET -v} -w 8880 2>&1 | tee ${LOGDIR}/$(date +%F-%s)-goseeder.log
+${HOME}/go/bin/dnsseeder -h <host.to.serve> -p <dns.port.to.listen.on> ${THENET} -v -w 8880 2>&1 | tee ${LOGDIR}/$(date +%F-%s)-goseeder.log
 
 
 ```
