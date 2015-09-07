@@ -22,9 +22,9 @@ const (
 	auditDelay = 22 // minutes between audit channel ticks
 	dnsDelay   = 57 // seconds between updates to active dns record list
 
-	maxFails = 58 // max number of connect fails before we delete a twistee. Just over 24 hours(checked every 33 minutes)
+	maxFails = 58 // max number of connect fails before we delete a node. Just over 24 hours(checked every 33 minutes)
 
-	maxTo = 250 // max seconds (4min 10 sec) for all comms to twistee to complete before we timeout
+	maxTo = 250 // max seconds (4min 10 sec) for all comms to node to complete before we timeout
 )
 
 const (
@@ -37,19 +37,37 @@ const (
 )
 
 const (
-	// twistee status
-	statusRG       = iota // reported good status. A remote twistee has reported this ip but we have not connected
-	statusCG              // confirmed good. We have connected to the twistee and received addresses
-	statusWG              // was good. Twistee was confirmed good but now having problems
+	// node status
+	statusRG       = iota // reported good status. A remote node has reported this ip but we have not connected
+	statusCG              // confirmed good. We have connected to the node and received addresses
+	statusWG              // was good. node was confirmed good but now having problems
 	statusNG              // no good. Will be removed from theList after 24 hours to redure bouncing ip addresses
 	maxStatusTypes        // used in main to allocate slice
 )
 
+/* NdCounts holds various statistics about the running system
+type NdCounts struct {
+	NdStatus  []uint32
+	NdStarts  []uint32
+	DNSCounts []uint32
+	mtx       sync.RWMutex
+}
+*/
 type dnsseeder struct {
-	net     *network            // network struct with config options for this network
-	uptime  time.Time           // as the name says
-	theList map[string]*twistee // the list of current clients
-	mtx     sync.RWMutex
+	id       wire.BitcoinNet  // Magic number - Unique ID for this network. Sent in header of all messages
+	theList  map[string]*node // the list of current nodes
+	mtx      sync.RWMutex     // protect thelist
+	maxSize  int              // max number of clients before we start restricting new entries
+	port     uint16           // default network port this seeder uses
+	pver     uint32           // minimum block height for the seeder
+	ttl      uint32           // DNS TTL to use for this seeder
+	dnsHost  string           // dns host we will serve results for this domain
+	name     string           // Short name for the network
+	desc     string           // Long description for the network
+	seeders  []string         // slice of seeders to pull ip addresses when starting this seeder
+	maxStart []uint32         // max number of goroutines to start each run for each status type
+	delay    []int64          // number of seconds to wait before we connect to a known client for each status
+	counts   NodeCounts       // structure to hold stats for this seeder
 }
 
 // initCrawlers needs to be run before the startCrawlers so it can get
@@ -57,28 +75,35 @@ type dnsseeder struct {
 // start the crawl process
 func (s *dnsseeder) initCrawlers() {
 
-	// get a list of permenant seeders
-	seeders := s.net.seeders
-
-	for _, aseeder := range seeders {
+	for _, aseeder := range s.seeders {
 		c := 0
 
+		if aseeder == "" {
+			continue
+		}
 		newRRs, err := net.LookupHost(aseeder)
 		if err != nil {
-			log.Printf("status - unable to do initial lookup to seeder %s %v\n", aseeder, err)
+			log.Printf("%s: unable to do initial lookup to seeder %s %v\n", s.name, aseeder, err)
 			continue
 		}
 
 		for _, ip := range newRRs {
 			if newIP := net.ParseIP(ip); newIP != nil {
 				// 1 at the end is the services flag
-				if x := config.seeder.addNa(wire.NewNetAddressIPPort(newIP, s.net.port, 1)); x == true {
+				if x := s.addNa(wire.NewNetAddressIPPort(newIP, s.port, 1)); x == true {
 					c++
 				}
 			}
 		}
 		if config.verbose {
-			log.Printf("status - completed import of %v addresses from %s\n", c, aseeder)
+			log.Printf("%s: completed import of %v addresses from %s\n", s.name, c, aseeder)
+		}
+	}
+	if len(s.theList) == 0 {
+		log.Printf("%s: Error: No ip addresses from seeders so I have nothing to crawl.\n", s.name)
+		for _, v := range s.seeders {
+			log.Printf("%s: Seeder: %s\n", s.name, v)
+
 		}
 	}
 }
@@ -90,7 +115,7 @@ func (s *dnsseeder) startCrawlers() {
 	tcount := len(s.theList)
 	if tcount == 0 {
 		if config.debug {
-			log.Printf("debug - startCrawlers fail: no twistees available\n")
+			log.Printf("debug - startCrawlers fail: no node ailable\n")
 		}
 		return
 	}
@@ -104,10 +129,10 @@ func (s *dnsseeder) startCrawlers() {
 		started    uint32 // count of goroutines started for this type
 		delay      int64  // number of second since last try
 	}{
-		{"statusRG", statusRG, s.net.maxStart[statusRG], 0, 0, s.net.delay[statusRG]},
-		{"statusCG", statusCG, s.net.maxStart[statusCG], 0, 0, s.net.delay[statusCG]},
-		{"statusWG", statusWG, s.net.maxStart[statusWG], 0, 0, s.net.delay[statusWG]},
-		{"statusNG", statusNG, s.net.maxStart[statusNG], 0, 0, s.net.delay[statusNG]},
+		{"statusRG", statusRG, s.maxStart[statusRG], 0, 0, s.delay[statusRG]},
+		{"statusCG", statusCG, s.maxStart[statusCG], 0, 0, s.delay[statusCG]},
+		{"statusWG", statusWG, s.maxStart[statusWG], 0, 0, s.delay[statusWG]},
+		{"statusNG", statusNG, s.maxStart[statusNG], 0, 0, s.delay[statusNG]},
 	}
 
 	s.mtx.RLock()
@@ -118,16 +143,16 @@ func (s *dnsseeder) startCrawlers() {
 
 		// range on a map will not return items in the same order each time
 		// so this is a random'ish selection
-		for _, tw := range s.theList {
+		for _, nd := range s.theList {
 
-			if tw.status != c.status {
+			if nd.status != c.status {
 				continue
 			}
 
 			// stats count
 			c.totalCount++
 
-			if tw.crawlActive == true {
+			if nd.crawlActive == true {
 				continue
 			}
 
@@ -135,23 +160,23 @@ func (s *dnsseeder) startCrawlers() {
 				continue
 			}
 
-			if (time.Now().Unix() - c.delay) <= tw.lastTry.Unix() {
+			if (time.Now().Unix() - c.delay) <= nd.lastTry.Unix() {
 				continue
 			}
 
-			// all looks good so start a go routine to crawl the remote twistee
-			go crawlTwistee(s, tw)
+			// all looks good so start a go routine to crawl the remote node
+			go crawlNode(s, nd)
 			c.started++
 		}
 
-		log.Printf("stats - started crawler: %s total: %v started: %v\n", c.desc, c.totalCount, c.started)
+		log.Printf("%s: started crawler: %s total: %v started: %v\n", s.name, c.desc, c.totalCount, c.started)
 
 		// update the global stats in another goroutine to free the main goroutine
 		// for other work
-		go updateTwCounts(c.status, c.totalCount, c.started)
+		go updateNodeCounts(s, c.status, c.totalCount, c.started)
 	}
 
-	log.Printf("stats - crawlers started. total twistees: %d\n", tcount)
+	log.Printf("%s: crawlers started. total clients: %d\n", s.name, tcount)
 
 	// returns and read lock released
 }
@@ -191,7 +216,7 @@ func (s *dnsseeder) addNa(nNa *wire.NetAddress) bool {
 		return false
 	}
 
-	nt := twistee{
+	nt := node{
 		na:          nNa,
 		lastConnect: time.Now(),
 		version:     0,
@@ -203,7 +228,7 @@ func (s *dnsseeder) addNa(nNa *wire.NetAddress) bool {
 	// select the dns type based on the remote address type and port
 	if x := nt.na.IP.To4(); x == nil {
 		// not ipv4
-		if nNa.Port != s.net.port {
+		if nNa.Port != s.port {
 			nt.dnsType = dnsV6Non
 
 			// produce the nonstdIP
@@ -214,7 +239,7 @@ func (s *dnsseeder) addNa(nNa *wire.NetAddress) bool {
 		}
 	} else {
 		// ipv4
-		if nNa.Port != s.net.port {
+		if nNa.Port != s.port {
 			nt.dnsType = dnsV4Non
 
 			// force ipv4 address into a 4 byte buffer
@@ -270,7 +295,7 @@ func crc16(bs []byte) uint16 {
 	return crc
 }
 
-func (s *dnsseeder) auditClients() {
+func (s *dnsseeder) auditNodes() {
 
 	c := 0
 
@@ -280,64 +305,64 @@ func (s *dnsseeder) auditClients() {
 
 	// cgGoal is 75% of the max statusCG clients we can crawl with the current network delay & maxStart settings.
 	// This allows us to cycle statusCG users to keep the list fresh
-	cgGoal := int(float64(float64(s.net.delay[statusCG]/crawlDelay)*float64(s.net.maxStart[statusCG])) * 0.75)
+	cgGoal := int(float64(float64(s.delay[statusCG]/crawlDelay)*float64(s.maxStart[statusCG])) * 0.75)
 	cgCount := 0
 
-	log.Printf("status - Audit start. statusCG Goal: %v System Uptime: %s\n", cgGoal, time.Since(s.uptime).String())
+	log.Printf("%s: Audit start. statusCG Goal: %v System Uptime: %s\n", s.name, cgGoal, time.Since(config.uptime).String())
 
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	for k, tw := range s.theList {
+	for k, nd := range s.theList {
 
-		if tw.crawlActive == true {
-			if time.Now().Unix()-tw.crawlStart.Unix() >= 300 {
+		if nd.crawlActive == true {
+			if time.Now().Unix()-nd.crawlStart.Unix() >= 300 {
 				log.Printf("warning - long running crawl > 5 minutes ====\n- %s status:rating:fails %v:%v:%v crawl start: %s last status: %s\n====\n",
 					k,
-					tw.status,
-					tw.rating,
-					tw.connectFails,
-					tw.crawlStart.String(),
-					tw.statusStr)
+					nd.status,
+					nd.rating,
+					nd.connectFails,
+					nd.crawlStart.String(),
+					nd.statusStr)
 			}
 		}
 
-		// Audit task is to remove clients that we have not been able to connect to
-		if tw.status == statusNG && tw.connectFails > maxFails {
+		// Audit task is to remove node that we have not been able to connect to
+		if nd.status == statusNG && nd.connectFails > maxFails {
 			if config.verbose {
-				log.Printf("status - purging twistee %s after %v failed connections\n", k, tw.connectFails)
+				log.Printf("%s: purging node %s after %v failed connections\n", s.name, k, nd.connectFails)
 			}
 
 			c++
-			// remove the map entry and mark the old twistee as
+			// remove the map entry and mark the old node as
 			// nil so garbage collector will remove it
 			s.theList[k] = nil
 			delete(s.theList, k)
 		}
 
 		// If seeder is full then remove old NG clients and fill up with possible new CG clients
-		if tw.status == statusNG && iAmFull {
+		if nd.status == statusNG && iAmFull {
 			if config.verbose {
-				log.Printf("status - seeder full purging twistee %s\n", k)
+				log.Printf("%s: seeder full purging node %s\n", s.name, k)
 			}
 
 			c++
-			// remove the map entry and mark the old twistee as
+			// remove the map entry and mark the old node as
 			// nil so garbage collector will remove it
 			s.theList[k] = nil
 			delete(s.theList, k)
 		}
 
 		// check if we need to purge statusCG to freshen the list
-		if tw.status == statusCG {
+		if nd.status == statusCG {
 			if cgCount++; cgCount > cgGoal {
 				// we have enough statusCG clients so purge remaining to cycle through the list
 				if config.verbose {
-					log.Printf("status - seeder cycle statusCG - purging client %s\n", k)
+					log.Printf("%s: seeder cycle statusCG - purging node %s\n", s.name, k)
 				}
 
 				c++
-				// remove the map entry and mark the old twistee as
+				// remove the map entry and mark the old node as
 				// nil so garbage collector will remove it
 				s.theList[k] = nil
 				delete(s.theList, k)
@@ -347,7 +372,7 @@ func (s *dnsseeder) auditClients() {
 
 	}
 	if config.verbose {
-		log.Printf("status - Audit complete. %v twistees purged\n", c)
+		log.Printf("%s: Audit complete. %v nodes purged\n", s.name, c)
 	}
 
 }
@@ -359,7 +384,7 @@ func (s *dnsseeder) loadDNS() {
 
 // isFull returns true if the number of remote clients is more than we want to store
 func (s *dnsseeder) isFull() bool {
-	if len(s.theList) > s.net.maxSize {
+	if len(s.theList) > s.maxSize {
 		return true
 	}
 	return false

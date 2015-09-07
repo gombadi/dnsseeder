@@ -1,73 +1,142 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/btcsuite/btcd/wire"
+	"log"
+	"os"
+	"strconv"
 )
 
-// network struct holds config details for the network the seeder is using
-type network struct {
-	id          wire.BitcoinNet // Magic number - Unique ID for this network. Sent in header of all messages
-	maxSize     int             // max number of clients before we start restricting new entries
-	port        uint16          // default network port this network uses
-	pver        uint32          // minimum block height for the network
-	ttl         uint32          // DNS TTL to use for this network
-	name        string          // Short name for the network
-	description string          // Long description for the network
-	seeders     []string        // slice of seeders to pull ip addresses when starting this seeder
-	maxStart    []uint32        // max number of goroutines to start each run for each status type
-	delay       []int64         // number of seconds to wait before we connect to a known client for each status
+// JNetwork is the exported struct that is read from the network file
+type JNetwork struct {
+	Name    string
+	Desc    string
+	Id      string
+	Port    uint16
+	Pver    uint32
+	DNSName string
+	TTL     uint32
+	Seeder1 string
+	Seeder2 string
+	Seeder3 string
 }
 
-// getNetworkNames returns a slice of the networks that have been configured
-func getNetworkNames() []string {
-	return []string{"twister", "bitcoin", "bitcoin-testnet"}
-}
+func createNetFile() {
+	// create a standard json template file that can be loaded into the app
 
-// selectNetwork will return a network struct for a given network
-func selectNetwork(name string) *network {
-	switch name {
-	case "twister":
-		return &network{
-			id:          0xd2bbdaf0,
-			port:        28333,
-			pver:        60000,
-			ttl:         600,
-			maxSize:     1000,
-			name:        "TwisterNet",
-			description: "Twister P2P Net",
-			seeders:     []string{"seed2.twister.net.co", "seed.twister.net.co", "seed3.twister.net.co"},
-			maxStart:    []uint32{15, 15, 15, 30},
-			delay:       []int64{184, 678, 237, 1876},
-		}
-	case "bitcoin":
-		return &network{
-			id:          0xd9b4bef9,
-			port:        8333,
-			pver:        70001,
-			ttl:         900,
-			maxSize:     1250,
-			name:        "BitcoinMainNet",
-			description: "Bitcoin Main Net",
-			seeders:     []string{"dnsseed.bluematt.me", "bitseed.xf2.org", "dnsseed.bitcoin.dashjr.org", "seed.bitcoin.sipa.be"},
-			maxStart:    []uint32{20, 20, 20, 30},
-			delay:       []int64{210, 789, 234, 1876},
-		}
-	case "bitcoin-testnet":
-		return &network{
-			id:          0xdab5bffa,
-			port:        18333,
-			pver:        70001,
-			ttl:         300,
-			maxSize:     250,
-			name:        "BitcoinTestNet",
-			description: "Bitcoin Test Net",
-			seeders:     []string{"testnet-seed.alexykot.me", "testnet-seed.bitcoin.petertodd.org", "testnet-seed.bluematt.me", "testnet-seed.bitcoin.schildbach.de"},
-			maxStart:    []uint32{15, 15, 15, 30},
-			delay:       []int64{184, 678, 237, 1876},
-		}
-	default:
-		return nil
+	// create a struct to encode with json
+	jnw := &JNetwork{
+		Id:      "0xabcdef01",
+		Port:    1234,
+		Pver:    70001,
+		TTL:     600,
+		DNSName: "seeder.example.com",
+		Name:    "SeederNet",
+		Desc:    "Description of SeederNet",
+		Seeder1: "seeder1.example.com",
+		Seeder2: "seed1.bob.com",
+		Seeder3: "seed2.example.com",
 	}
+
+	f, err := os.Create("dnsseeder.json")
+	if err != nil {
+		log.Printf("error creating template file: %v\n", err)
+	}
+	defer f.Close()
+
+	j, jerr := json.MarshalIndent(jnw, "", " ")
+	if jerr != nil {
+		log.Printf("error parsing json: %v\n", err)
+	}
+	_, ferr := f.Write(j)
+	if ferr != nil {
+		log.Printf("error writing to template file: %v\n", err)
+	}
+}
+
+func loadNetwork(fName string) (*dnsseeder, error) {
+	nwFile, err := os.Open(fName)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Error reading network file: %v", err))
+	}
+
+	defer nwFile.Close()
+
+	var jnw JNetwork
+
+	jsonParser := json.NewDecoder(nwFile)
+	if err = jsonParser.Decode(&jnw); err != nil {
+		return nil, errors.New(fmt.Sprintf("Error decoding network file: %v", err))
+	}
+
+	return initNetwork(jnw, jnw.Name)
+}
+
+func initNetwork(jnw JNetwork, name string) (*dnsseeder, error) {
+
+	if jnw.Port == 0 {
+		return nil, errors.New(fmt.Sprintf("Invalid port supplied: %v", jnw.Port))
+	}
+
+	if jnw.DNSName == "" {
+		return nil, errors.New(fmt.Sprintf("No DNS Hostname supplied"))
+	}
+
+	if _, ok := config.seeders[jnw.Name]; ok {
+		return nil, errors.New(fmt.Sprintf("Name already exists from previous file - %s", jnw.Name))
+	}
+
+	// init the seeder
+	seeder := &dnsseeder{}
+	seeder.theList = make(map[string]*node)
+	seeder.port = jnw.Port
+	seeder.pver = jnw.Pver
+	seeder.ttl = jnw.TTL
+	seeder.name = jnw.Name
+	seeder.desc = jnw.Desc
+	seeder.dnsHost = jnw.DNSName
+
+	// conver the network magic number to a Uint32
+	t1, err := strconv.ParseUint(jnw.Id, 0, 32)
+	if err != nil {
+		return nil, errors.New(fmt.Sprintf("Error converting Network Magic number: %v", err))
+	}
+	seeder.id = wire.BitcoinNet(t1)
+
+	// load the seeder dns
+	seeder.seeders = make([]string, 3)
+	seeder.seeders[0] = jnw.Seeder1
+	seeder.seeders[1] = jnw.Seeder2
+	seeder.seeders[2] = jnw.Seeder3
+
+	// add some checks to the start & delay values to keep them sane
+	seeder.maxStart = []uint32{20, 20, 20, 30}
+	seeder.delay = []int64{210, 789, 234, 1876}
+	seeder.maxSize = 1250
+
+	// initialize the stats counters
+	seeder.counts.NdStatus = make([]uint32, maxStatusTypes)
+	seeder.counts.NdStarts = make([]uint32, maxStatusTypes)
+	seeder.counts.DNSCounts = make([]uint32, maxDNSTypes)
+
+	// some sanity checks on the loaded config options
+	if seeder.ttl < 60 {
+		seeder.ttl = 60
+	}
+	// check for duplicates
+	for _, v := range config.seeders {
+		if v.id == seeder.id {
+			return nil, errors.New(fmt.Sprintf("Duplicate Magic id. Already loaded for %s so can not be used for %s", v.id, v.name, seeder.name))
+		}
+		if v.dnsHost == seeder.dnsHost {
+			return nil, errors.New(fmt.Sprintf("Duplicate DNS names. Already loaded %s for %s so can not be used for %s", v.dnsHost, v.name, seeder.name))
+		}
+	}
+
+	return seeder, nil
 }
 
 /*

@@ -20,82 +20,83 @@ func (e *crawlError) Error() string {
 	return "err: " + e.errLoc + ": " + e.Err.Error()
 }
 
-// crawlTwistee runs in a goroutine, crawls the remote ip and updates the master
+// crawlNode runs in a goroutine, crawls the remote ip and updates the master
 // list of currently active addresses
-func crawlTwistee(s *dnsseeder, tw *twistee) {
+func crawlNode(s *dnsseeder, nd *node) {
 
-	tw.crawlActive = true
-	tw.crawlStart = time.Now()
+	nd.crawlActive = true
+	nd.crawlStart = time.Now()
 
-	defer crawlEnd(tw)
+	defer crawlEnd(nd)
 
 	if config.debug {
-		log.Printf("debug - start crawl: twistee %s status: %v:%v lastcrawl: %s\n",
-			net.JoinHostPort(tw.na.IP.String(),
-				strconv.Itoa(int(tw.na.Port))),
-			tw.status,
-			tw.rating,
-			time.Since(tw.crawlStart).String())
+		log.Printf("debug - start crawl: node %s status: %v:%v lastcrawl: %s\n",
+			net.JoinHostPort(nd.na.IP.String(),
+				strconv.Itoa(int(nd.na.Port))),
+			nd.status,
+			nd.rating,
+			time.Since(nd.crawlStart).String())
 	}
 
 	// connect to the remote ip and ask them for their addr list
-	rna, e := crawlIP(s.net.pver, s.net.id, tw)
+	rna, e := crawlIP(s.pver, s.id, nd)
 
 	if e != nil {
-		// update the fact that we have not connected to this twistee
-		tw.lastTry = time.Now()
-		tw.connectFails++
-		tw.statusStr = e.Error()
+		// update the fact that we have not connected to this node
+		nd.lastTry = time.Now()
+		nd.connectFails++
+		nd.statusStr = e.Error()
 
-		// update the status of this failed twistee
-		switch tw.status {
+		// update the status of this failed node
+		switch nd.status {
 		case statusRG:
 			// if we are full then any RG failures will skip directly to NG
 			if s.isFull() {
-				tw.status = statusNG // not able to connect to this twistee so ignore
-				tw.statusTime = time.Now()
+				nd.status = statusNG // not able to connect to this node so ignore
+				nd.statusTime = time.Now()
 			} else {
-				if tw.rating += 25; tw.rating > 30 {
-					tw.status = statusWG
-					tw.statusTime = time.Now()
+				if nd.rating += 25; nd.rating > 30 {
+					nd.status = statusWG
+					nd.statusTime = time.Now()
 				}
 			}
 		case statusCG:
-			if tw.rating += 25; tw.rating >= 50 {
-				tw.status = statusWG
-				tw.statusTime = time.Now()
+			if nd.rating += 25; nd.rating >= 50 {
+				nd.status = statusWG
+				nd.statusTime = time.Now()
 			}
 		case statusWG:
-			if tw.rating += 15; tw.rating >= 100 {
-				tw.status = statusNG // not able to connect to this twistee so ignore
-				tw.statusTime = time.Now()
+			if nd.rating += 15; nd.rating >= 100 {
+				nd.status = statusNG // not able to connect to this node so ignore
+				nd.statusTime = time.Now()
 			}
 		}
 		// no more to do so return which will shutdown the goroutine & call
 		// the deffered cleanup
 		if config.verbose {
-			log.Printf("status - failed crawl: twistee %s s:r:f: %v:%v:%v %s\n",
-				net.JoinHostPort(tw.na.IP.String(),
-					strconv.Itoa(int(tw.na.Port))),
-				tw.status,
-				tw.rating,
-				tw.connectFails,
-				tw.statusStr)
+			log.Printf("%s: failed crawl node: %s s:r:f: %v:%v:%v %s\n",
+				s.name,
+				net.JoinHostPort(nd.na.IP.String(),
+					strconv.Itoa(int(nd.na.Port))),
+				nd.status,
+				nd.rating,
+				nd.connectFails,
+				nd.statusStr)
 		}
 		return
 	}
 
 	// succesful connection and addresses received so mark status
-	if tw.status != statusCG {
-		tw.status = statusCG
-		tw.statusTime = time.Now()
+	if nd.status != statusCG {
+		nd.status = statusCG
+		nd.statusTime = time.Now()
 	}
-	cs := tw.lastConnect
-	tw.rating = 0
-	tw.connectFails = 0
-	tw.lastConnect = time.Now()
-	tw.lastTry = time.Now()
-	tw.statusStr = "ok: received remote address list"
+	cs := nd.lastConnect
+	nd.rating = 0
+	nd.connectFails = 0
+	nd.lastConnect = time.Now()
+	nd.lastTry = time.Now()
+	nd.statusStr = "ok: received remote address list"
 
 	added := 0
 
@@ -111,15 +112,16 @@ func crawlTwistee(s *dnsseeder, tw *twistee) {
 	}
 
 	if config.verbose {
-		log.Printf("status - crawl done: twistee: %s s:r:f: %v:%v:%v addr: %v:%v CrawlTime: %s Last connect: %v ago\n",
-			net.JoinHostPort(tw.na.IP.String(),
-				strconv.Itoa(int(tw.na.Port))),
-			tw.status,
-			tw.rating,
-			tw.connectFails,
+		log.Printf("%s: crawl done: node: %s s:r:f: %v:%v:%v addr: %v:%v CrawlTime: %s Last connect: %v ago\n",
+			s.name,
+			net.JoinHostPort(nd.na.IP.String(),
+				strconv.Itoa(int(nd.na.Port))),
+			nd.status,
+			nd.rating,
+			nd.connectFails,
 			len(rna),
 			added,
-			time.Since(tw.crawlStart).String(),
+			time.Since(nd.crawlStart).String(),
 			time.Since(cs).String())
 	}
 
@@ -127,17 +129,17 @@ func crawlTwistee(s *dnsseeder, tw *twistee) {
 }
 
 // crawlEnd is a deffered func to update theList after a crawl is all done
-func crawlEnd(tw *twistee) {
-	tw.crawlActive = false
-	// FIXME - scan for long term crawl active twistees. Dial timeout is 10 seconds
+func crawlEnd(nd *node) {
+	nd.crawlActive = false
+	// FIXME - scan for long term crawl active node. Dial timeout is 10 seconds
 	// so should be done in under 5 minutes
 }
 
 // crawlIP retrievs a slice of ip addresses from a client
-func crawlIP(pver uint32, netID wire.BitcoinNet, tw *twistee) ([]*wire.NetAddress, *crawlError) {
+func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node) ([]*wire.NetAddress, *crawlError) {
 
-	ip := tw.na.IP.String()
-	port := strconv.Itoa(int(tw.na.Port))
+	ip := nd.na.IP.String()
+	port := strconv.Itoa(int(nd.na.Port))
 	// get correct formatting for ipv6 addresses
 	dialString := net.JoinHostPort(ip, port)
 
@@ -151,7 +153,7 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, tw *twistee) ([]*wire.NetAddres
 
 	defer conn.Close()
 	if config.debug {
-		log.Printf("debug - Connected to remote address: %s Last connect was %v ago\n", ip, time.Since(tw.lastConnect).String())
+		log.Printf("debug - Connected to remote address: %s Last connect was %v ago\n", ip, time.Since(nd.lastConnect).String())
 	}
 
 	// set a deadline for all comms to be done by. After this all i/o will error
@@ -183,14 +185,14 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, tw *twistee) ([]*wire.NetAddres
 		if config.debug {
 			log.Printf("%s - Remote version: %v\n", ip, msg.ProtocolVersion)
 		}
-		// fill the Twistee struct with the remote details
-		tw.version = msg.ProtocolVersion
-		tw.services = msg.Services
-		tw.lastBlock = msg.LastBlock
-		if tw.strVersion != msg.UserAgent {
+		// fill the node struct with the remote details
+		nd.version = msg.ProtocolVersion
+		nd.services = msg.Services
+		nd.lastBlock = msg.LastBlock
+		if nd.strVersion != msg.UserAgent {
 			// if the srtVersion is already the same then don't overwrite it.
 			// saves the GC having to cleanup a perfectly good string
-			tw.strVersion = msg.UserAgent
+			nd.strVersion = msg.UserAgent
 		}
 	default:
 		return nil, &crawlError{"Did not receive expected Version message from remote client", errors.New("")}
@@ -231,7 +233,7 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, tw *twistee) ([]*wire.NetAddres
 	dowhile := true
 	for dowhile == true {
 
-		// Using the Bitcoin lib for the Twister Net means it does not understand some
+		// Using the Bitcoin lib for the some networks means it does not understand some
 		// of the commands and will error. We can ignore these as we are only
 		// interested in the addr message and its content.
 		msgaddr, _, _ := wire.ReadMessage(conn, pver, netID)

@@ -1,9 +1,11 @@
 # dnsseeder
-Go Language dns seeder for Networks that use Bitcoin technology such as the [Twister P2P network](http://twister.net.co/)
+Go Language dns seeder for Networks that use Bitcoin technology such as the [Twister P2P network](http://twister.net.co/) and the Bitcoin networks.
 
-It is based on the original twister-seeder https://github.com/miguelfreitas/twister-seeder
+It is based on the original c++ seeders created for the Bitcoin network and copied to other similar networks.
 
-This codebase can now seed different networks. At the moment it supports Twister and Bitcoin networks. These are configured in network.go and selected at runtime with -net command line option.
+This application can seed one or more networks on the same ip address. At the moment there are config files for the Twister and Bitcoin networks. You use the -netfile commandline option to specify one or more comma seperated filenames to load the network configuration for that network.
+
+You can use the -j option to produce a sample json network config file (dnsseeder.json) in the current directory and then edit the file to seed your own network.
 
 Also see the associated utility to display information about [non-standard ip addresses](https://github.com/gombadi/nonstd/)
 
@@ -34,19 +36,19 @@ The binary will then be available in ${HOME}/go/bin
 
 ## Usage
 
-    $ dnsseeder -h <domain respond to> -net <network to seed>
+    $ dnsseeder -v -netfile <filename1,filename2>
 
 An easy way to run the program is with tmux or screen. This enables you to log out and leave the program running.
 
-If you want to be able to view the web interface then add -w port for the web server to listen on. If this is not provided then no web interface will be available. With the web site running you can then access the site by http://localhost:port/statusCG
+If you want to be able to view the web interface then add -w port for the web server to listen on. If this is not provided then no web interface will be available. With the web site running you can then access the site by http://localhost:port/summary
 
 **NOTE -** For security reasons the web server will only listen on localhost so you will need to either use an ssh tunnel or proxy requests via a web server like Nginx or Apache.
 
 ```
 
 Command line Options:
--h hostname to serve 
--net The network to seed. Currently twister, bitcoin, bitcoin-test
+-netfile comma seperated list of json network config files to load
+-j write a sample network config file in json format and exit.
 -p port to listen on for DNS requests
 -d Produce debug output
 -v Produce verbose output
@@ -66,18 +68,11 @@ mkdir -p ${LOGDIR}
 
 gzip ${LOGDIR}/*.log
 
-# pass through the logging level needed
-if [ -z ${1} ]; then
-        THENET="twister"
-else
-        THENET="${1}"
-fi
-
 cd
 echo
 echo "======= Run the Go Language dnsseed ======="
 echo
-${HOME}/go/bin/dnsseeder -h <host.to.serve> -p <dns.port.to.listen.on> ${THENET} -v -w 8880 2>&1 | tee ${LOGDIR}/$(date +%F-%s)-goseeder.log
+${HOME}/go/bin/dnsseeder -p <dns.port.to.listen.on> -v -w 8880 -netfile ${1} 2>&1 | tee ${LOGDIR}/$(date +%F-%s)-goseeder.log
 
 
 ```

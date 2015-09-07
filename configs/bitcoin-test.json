@@ -1,0 +1,12 @@
+{
+ "Name": "BitcoinNet-Test",
+ "Desc": "Bitcoin Test Net",
+ "Id": "0xdab5bffa",
+ "Port": 18333,
+ "Pver": 70001,
+ "DNSName": "btctseed.zagbot.com",
+ "TTL": 300,
+ "Seeder1": "testnet-seed.alexykot.me",
+ "Seeder2": "testnet-seed.bitcoin.petertodd.org",
+ "Seeder3": "testnet-seed.bluematt.me"
+}

@@ -7,8 +7,8 @@ import (
 	"github.com/btcsuite/btcd/wire"
 )
 
-// Twistee struct contains details on one twister client
-type twistee struct {
+// Node struct contains details on one client
+type node struct {
 	na           *wire.NetAddress // holds ip address & port details
 	lastConnect  time.Time        // last time we sucessfully connected to this client
 	lastTry      time.Time        // last time we tried to connect to this client
@@ -28,8 +28,8 @@ type twistee struct {
 }
 
 // status2str will return the string description of the status
-func (tw twistee) status2str() string {
-	switch tw.status {
+func (nd node) status2str() string {
+	switch nd.status {
 	case statusRG:
 		return "statusRG"
 	case statusCG:
@@ -44,8 +44,8 @@ func (tw twistee) status2str() string {
 }
 
 // dns2str will return the string description of the dns type
-func (tw twistee) dns2str() string {
-	switch tw.dnsType {
+func (nd node) dns2str() string {
+	switch nd.dnsType {
 	case dnsV4Std:
 		return "v4 standard port"
 	case dnsV4Non:

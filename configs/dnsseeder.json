@@ -1,0 +1,12 @@
+{
+ "Name": "SeederNet",
+ "Desc": "Description of SeederNet",
+ "Id": "0xabcdef01",
+ "Port": 1234,
+ "Pver": 70001,
+ "DNSName": "seeder.example.com",
+ "TTL": 600,
+ "Seeder1": "seeder1.example.com",
+ "Seeder2": "seed1.bob.com",
+ "Seeder3": "seed2.example.com"
+}

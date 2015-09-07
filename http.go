@@ -13,12 +13,13 @@ import (
 // to the dnsseeder
 func startHTTP(port string) {
 
-	http.HandleFunc("/dns", dnsHandler)
-	http.HandleFunc("/twistee", twisteeHandler)
+	http.HandleFunc("/dns", dnsWebHandler)
+	http.HandleFunc("/node", nodeHandler)
 	http.HandleFunc("/statusRG", statusRGHandler)
 	http.HandleFunc("/statusCG", statusCGHandler)
 	http.HandleFunc("/statusWG", statusWGHandler)
 	http.HandleFunc("/statusNG", statusNGHandler)
+	http.HandleFunc("/summary", summaryHandler)
 	http.HandleFunc("/", emptyHandler)
 	// listen only on localhost
 	err := http.ListenAndServe("127.0.0.1:"+port, nil)
@@ -28,18 +29,30 @@ func startHTTP(port string) {
 
 }
 
-// reflectHandler processes all requests and returns output in the requested format
-func dnsHandler(w http.ResponseWriter, r *http.Request) {
+// dnsWebHandler processes all requests and returns output in the requested format
+func dnsWebHandler(w http.ResponseWriter, r *http.Request) {
 
 	st := time.Now()
 
+	// skip the s= from the raw query
+	n := r.FormValue("s")
+	s := getSeederByName(n)
+	if s == nil {
+		writeHeader(w, r)
+		fmt.Fprintf(w, "No seeder found: %s", html.EscapeString(n))
+		writeFooter(w, r, st)
+		return
+	}
+
 	// FIXME - This is ugly code and needs to be cleaned up a lot
 
-	// get v4 std addresses
-	v4std := getv4stdRR()
-	v4non := getv4nonRR()
-	v6std := getv6stdRR()
-	v6non := getv6nonRR()
+	config.dnsmtx.RLock()
+	// if the dns map does not have a key for the request it will return an empty slice
+	v4std := config.dns[s.dnsHost+".A"]
+	v4non := config.dns["nonstd."+s.dnsHost+".A"]
+	v6std := config.dns[s.dnsHost+".AAAA"]
+	v6non := config.dns["nonstd."+s.dnsHost+".AAAA"]
+	config.dnsmtx.RUnlock()
 
 	var v4stdstr, v4nonstr []string
 	var v6stdstr, v6nonstr []string
@@ -172,28 +185,39 @@ func statusNGHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 type webstatus struct {
-	Key   string
-	Value string
+	Key    string
+	Value  string
+	Seeder string
 }
 
 func statusHandler(w http.ResponseWriter, r *http.Request, status uint32) {
 
 	startT := time.Now()
 
+	// read the seeder name
+	n := r.FormValue("s")
+	s := getSeederByName(n)
+	if s == nil {
+		writeHeader(w, r)
+		fmt.Fprintf(w, "No seeder found called %s", html.EscapeString(n))
+		writeFooter(w, r, startT)
+		return
+	}
+
 	// gather all the info before writing anything to the remote browser
-	ws := generateWebStatus(status)
+	ws := generateWebStatus(s, status)
 
 	st := `
 	<center>
 	<table border=1>
 	  <tr>
-	  <th>Twistee</th>
+	  <th>Node</th>
 	  <th>Summary</th>
 	  </tr>
 	     {{range .}}
 	  <tr>
 	  <td>
-	       <a href="/twistee?tw={{.Key}}">{{.Key}}</a>
+	       <a href="/node?s={{.Seeder}}&nd={{.Key}}">{{.Key}}</a>
 	  </td>
 	  <td>
 	       {{.Value}}
@@ -207,18 +231,18 @@ func statusHandler(w http.ResponseWriter, r *http.Request, status uint32) {
 	writeHeader(w, r)
 
 	if len(ws) == 0 {
-		fmt.Fprintf(w, "No Twistees found with this status")
+		fmt.Fprintf(w, "No Nodes found with this status")
 	} else {
 
 		switch status {
 		case statusRG:
-			fmt.Fprintf(w, "<center><b>Twistee Status: statusRG - (Reported Good) Have not been able to get addresses yet</b></center>")
+			fmt.Fprintf(w, "<center><b>Node Status: statusRG - (Reported Good) Have not been able to get addresses yet</b></center>")
 		case statusCG:
-			fmt.Fprintf(w, "<center><b>Twistee Status: statusCG - (Currently Good) Able to connect and get addresses</b></center>")
+			fmt.Fprintf(w, "<center><b>Node Status: statusCG - (Currently Good) Able to connect and get addresses</b></center>")
 		case statusWG:
-			fmt.Fprintf(w, "<center><b>Twistee Status: statusWG - (Was Good) Was Ok but now can not get addresses</b></center>")
+			fmt.Fprintf(w, "<center><b>Node Status: statusWG - (Was Good) Was Ok but now can not get addresses</b></center>")
 		case statusNG:
-			fmt.Fprintf(w, "<center><b>Twistee Status: statusNG - (No Good) Unable to get addresses</b></center>")
+			fmt.Fprintf(w, "<center><b>Node Status: statusNG - (No Good) Unable to get addresses</b></center>")
 		}
 		t := template.New("Status template")
 		t, err := t.Parse(st)
@@ -234,110 +258,9 @@ func statusHandler(w http.ResponseWriter, r *http.Request, status uint32) {
 	writeFooter(w, r, startT)
 }
 
-// copy Twistee details into a template friendly struct
-type webtemplate struct {
-	Key            string
-	IP             string
-	Port           uint16
-	Statusstr      string
-	Rating         string
-	Dnstype        string
-	Lastconnect    string
-	Lastconnectago string
-	Lasttry        string
-	Lasttryago     string
-	Crawlstart     string
-	Crawlstartago  string
-	Crawlactive    bool
-	Connectfails   uint32
-	Version        int32
-	Strversion     string
-	Services       string
-	Lastblock      int32
-	Nonstdip       string
-}
-
-// reflectHandler processes all requests and returns output in the requested format
-func twisteeHandler(w http.ResponseWriter, r *http.Request) {
-
-	st := time.Now()
-
-	twt := `
-    <center>
-    <table border=1>
-      <tr>
-      <th>Twistee {{.Key}}</th><th>Details</th>
-      </tr>
-      <tr><td>IP Address</td><td>{{.IP}}</td></tr>
-      <tr><td>Port</td><td>{{.Port}}</td></tr>
-      <tr><td>DNS Type</td><td>{{.Dnstype}}</td></tr>
-      <tr><td>Non Standard IP</td><td>{{.Nonstdip}}</td></tr>
-      <tr><td>Last Connect</td><td>{{.Lastconnect}}<br>{{.Lastconnectago}} ago</td></tr>
-      <tr><td>Last Connect Status</td><td>{{.Statusstr}}</td></tr>
-      <tr><td>Last Try</td><td>{{.Lasttry}}<br>{{.Lasttryago}} ago</td></tr>
-      <tr><td>Crawl Start</td><td>{{.Crawlstart}}<br>{{.Crawlstartago}} ago</td></tr>
-      <tr><td>Crawl Active</td><td>{{.Crawlactive}}</td></tr>
-      <tr><td>Connection Fails</td><td>{{.Connectfails}}</td></tr>
-      <tr><td>Remote Version</td><td>{{.Version}}</td></tr>
-      <tr><td>Remote SubVersion</td><td>{{.Strversion}}</td></tr>
-      <tr><td>Remote Services</td><td>{{.Services}}</td></tr>
-      <tr><td>Remote Last Block</td><td>{{.Lastblock}}</td></tr>
-    </table>
-    </center>
-    `
-	s := config.seeder
-
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-
-	// skip the tw= from the raw query
-	k := html.UnescapeString(r.URL.RawQuery[3:])
-	writeHeader(w, r)
-	if _, ok := s.theList[k]; ok == false {
-		fmt.Fprintf(w, "Sorry there is no Twistee with those details\n")
-	} else {
-
-		tw := s.theList[k]
-		wt := webtemplate{
-			IP:             tw.na.IP.String(),
-			Port:           tw.na.Port,
-			Dnstype:        tw.dns2str(),
-			Nonstdip:       tw.nonstdIP.String(),
-			Statusstr:      tw.statusStr,
-			Lastconnect:    tw.lastConnect.String(),
-			Lastconnectago: time.Since(tw.lastConnect).String(),
-			Lasttry:        tw.lastTry.String(),
-			Lasttryago:     time.Since(tw.lastTry).String(),
-			Crawlstart:     tw.crawlStart.String(),
-			Crawlstartago:  time.Since(tw.crawlStart).String(),
-			Connectfails:   tw.connectFails,
-			Crawlactive:    tw.crawlActive,
-			Version:        tw.version,
-			Strversion:     tw.strVersion,
-			Services:       tw.services.String(),
-			Lastblock:      tw.lastBlock,
-		}
-
-		// display details for the Twistee
-		t := template.New("Twistee template")
-		t, err := t.Parse(twt)
-		if err != nil {
-			log.Printf("error parsing Twistee template %v\n", err)
-		}
-		err = t.Execute(w, wt)
-		if err != nil {
-			log.Printf("error executing Twistee template %v\n", err)
-		}
-
-	}
-	writeFooter(w, r, st)
-}
-
-// generateWebStatus is given a twistee status and returns a slice of webstatus structures
+// generateWebStatus is given a node status and returns a slice of webstatus structures
 // ready to be ranged over by an html/template
-func generateWebStatus(status uint32) (ws []webstatus) {
-
-	s := config.seeder
+func generateWebStatus(s *dnsseeder, status uint32) (ws []webstatus) {
 
 	s.mtx.RLock()
 	defer s.mtx.RUnlock()
@@ -377,8 +300,9 @@ func generateWebStatus(status uint32) (ws []webstatus) {
 		}
 
 		ows := webstatus{
-			Key:   k,
-			Value: valueStr,
+			Key:    k,
+			Value:  valueStr,
+			Seeder: s.name,
 		}
 		ws = append(ws, ows)
 	}
@@ -386,10 +310,119 @@ func generateWebStatus(status uint32) (ws []webstatus) {
 	return ws
 }
 
-// genHeader will output the standard header
-func writeHeader(w http.ResponseWriter, r *http.Request) {
+// copy Node details into a template friendly struct
+type webtemplate struct {
+	Key            string
+	IP             string
+	Port           uint16
+	Statusstr      string
+	Rating         string
+	Dnstype        string
+	Lastconnect    string
+	Lastconnectago string
+	Lasttry        string
+	Lasttryago     string
+	Crawlstart     string
+	Crawlstartago  string
+	Crawlactive    bool
+	Connectfails   uint32
+	Version        int32
+	Strversion     string
+	Services       string
+	Lastblock      int32
+	Nonstdip       string
+}
+
+// nodeHandler displays details about one node
+func nodeHandler(w http.ResponseWriter, r *http.Request) {
+
+	st := time.Now()
+
+	ndt := `
+    <center>
+    <table border=1>
+      <tr>
+      <th>Node {{.Key}}</th><th>Details</th>
+      </tr>
+      <tr><td>IP Address</td><td>{{.IP}}</td></tr>
+      <tr><td>Port</td><td>{{.Port}}</td></tr>
+      <tr><td>DNS Type</td><td>{{.Dnstype}}</td></tr>
+      <tr><td>Non Standard IP</td><td>{{.Nonstdip}}</td></tr>
+      <tr><td>Last Connect</td><td>{{.Lastconnect}}<br>{{.Lastconnectago}} ago</td></tr>
+      <tr><td>Last Connect Status</td><td>{{.Statusstr}}</td></tr>
+      <tr><td>Last Try</td><td>{{.Lasttry}}<br>{{.Lasttryago}} ago</td></tr>
+      <tr><td>Crawl Start</td><td>{{.Crawlstart}}<br>{{.Crawlstartago}} ago</td></tr>
+      <tr><td>Crawl Active</td><td>{{.Crawlactive}}</td></tr>
+      <tr><td>Connection Fails</td><td>{{.Connectfails}}</td></tr>
+      <tr><td>Remote Version</td><td>{{.Version}}</td></tr>
+      <tr><td>Remote SubVersion</td><td>{{.Strversion}}</td></tr>
+      <tr><td>Remote Services</td><td>{{.Services}}</td></tr>
+      <tr><td>Remote Last Block</td><td>{{.Lastblock}}</td></tr>
+    </table>
+    </center>
+    `
+	// read the seeder name
+	n := r.FormValue("s")
+	s := getSeederByName(n)
+	if s == nil {
+		writeHeader(w, r)
+		fmt.Fprintf(w, "No seeder found called %s", html.EscapeString(n))
+		writeFooter(w, r, st)
+		return
+	}
+
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	k := r.FormValue("nd")
+	writeHeader(w, r)
+	if _, ok := s.theList[k]; ok == false {
+		fmt.Fprintf(w, "Sorry there is no Node with those details\n")
+	} else {
+
+		nd := s.theList[k]
+		wt := webtemplate{
+			IP:             nd.na.IP.String(),
+			Port:           nd.na.Port,
+			Dnstype:        nd.dns2str(),
+			Nonstdip:       nd.nonstdIP.String(),
+			Statusstr:      nd.statusStr,
+			Lastconnect:    nd.lastConnect.String(),
+			Lastconnectago: time.Since(nd.lastConnect).String(),
+			Lasttry:        nd.lastTry.String(),
+			Lasttryago:     time.Since(nd.lastTry).String(),
+			Crawlstart:     nd.crawlStart.String(),
+			Crawlstartago:  time.Since(nd.crawlStart).String(),
+			Connectfails:   nd.connectFails,
+			Crawlactive:    nd.crawlActive,
+			Version:        nd.version,
+			Strversion:     nd.strVersion,
+			Services:       nd.services.String(),
+			Lastblock:      nd.lastBlock,
+		}
+
+		// display details for the Node
+		t := template.New("Node template")
+		t, err := t.Parse(ndt)
+		if err != nil {
+			log.Printf("error parsing Node template %v\n", err)
+		}
+		err = t.Execute(w, wt)
+		if err != nil {
+			log.Printf("error executing Node template %v\n", err)
+		}
+
+	}
+	writeFooter(w, r, st)
+}
+
+// summaryHandler displays details about one node
+func summaryHandler(w http.ResponseWriter, r *http.Request) {
+
+	st := time.Now()
 
 	var hc struct {
+		Name     string
 		RG       uint32
 		RGS      uint32
 		CG       uint32
@@ -406,65 +439,85 @@ func writeHeader(w http.ResponseWriter, r *http.Request) {
 		DNSTotal uint32
 	}
 
-	// fill the structs so they can be displayed via the template
-	counts.mtx.RLock()
-	hc.RG = counts.TwStatus[statusRG]
-	hc.RGS = counts.TwStarts[statusRG]
-	hc.CG = counts.TwStatus[statusCG]
-	hc.CGS = counts.TwStarts[statusCG]
-	hc.WG = counts.TwStatus[statusWG]
-	hc.WGS = counts.TwStarts[statusWG]
-	hc.NG = counts.TwStatus[statusNG]
-	hc.NGS = counts.TwStarts[statusNG]
-	hc.Total = hc.RG + hc.CG + hc.WG + hc.NG
+	writeHeader(w, r)
+	// loop through each of the seeders
+	for _, s := range config.seeders {
 
-	hc.V4Std = counts.DNSCounts[dnsV4Std]
-	hc.V4Non = counts.DNSCounts[dnsV4Non]
-	hc.V6Std = counts.DNSCounts[dnsV6Std]
-	hc.V6Non = counts.DNSCounts[dnsV6Non]
-	hc.DNSTotal = hc.V4Std + hc.V4Non + hc.V6Std + hc.V6Non
-	counts.mtx.RUnlock()
+		hc.Name = s.name
+		// fill the structs so they can be displayed via the template
+		s.counts.mtx.RLock()
+		hc.RG = s.counts.NdStatus[statusRG]
+		hc.RGS = s.counts.NdStarts[statusRG]
+		hc.CG = s.counts.NdStatus[statusCG]
+		hc.CGS = s.counts.NdStarts[statusCG]
+		hc.WG = s.counts.NdStatus[statusWG]
+		hc.WGS = s.counts.NdStarts[statusWG]
+		hc.NG = s.counts.NdStatus[statusNG]
+		hc.NGS = s.counts.NdStarts[statusNG]
+		hc.Total = hc.RG + hc.CG + hc.WG + hc.NG
 
+		hc.V4Std = s.counts.DNSCounts[dnsV4Std]
+		hc.V4Non = s.counts.DNSCounts[dnsV4Non]
+		hc.V6Std = s.counts.DNSCounts[dnsV6Std]
+		hc.V6Non = s.counts.DNSCounts[dnsV6Non]
+		hc.DNSTotal = hc.V4Std + hc.V4Non + hc.V6Std + hc.V6Non
+		s.counts.mtx.RUnlock()
+
+		// we are using basic and simple html here. No fancy graphics or css
+		sp := `
+    <b>Stats for seeder: {{.Name}}</b>
+    <center>
+    <table><tr><td>
+    Node Stats (count/started)<br>
+    <table border=1><tr>
+	<td><a href="/statusRG?s={{.Name}}">RG: {{.RG}}/{{.RGS}}</a></td>
+    <td><a href="/statusCG?s={{.Name}}">CG: {{.CG}}/{{.CGS}}</a></td>
+    <td><a href="/statusWG?s={{.Name}}">WG: {{.WG}}/{{.WGS}}</a></td>
+    <td><a href="/statusNG?s={{.Name}}">NG: {{.NG}}/{{.NGS}}</a></td>
+    <td>Total: {{.Total}}</td>
+    </tr></table>
+    </td><td>
+    DNS Requests<br>
+    <table border=1><tr>
+	<td>V4 Std: {{.V4Std}}</td>
+    <td>V4 Non: {{.V4Non}}</td>
+    <td>V6 Std: {{.V6Std}}</td>
+    <td>V6 Non: {{.V6Non}}</td>
+    <td><a href="/dns?s={{.Name}}">Total: {{.DNSTotal}}</a></td>
+    </tr></table>
+    </td></tr></table>
+	</center>
+	`
+		t := template.New("Header template")
+		t, err := t.Parse(sp)
+		if err != nil {
+			log.Printf("error parsing summary template %v\n", err)
+		}
+
+		err = t.Execute(w, hc)
+		if err != nil {
+			log.Printf("error executing summary template %v\n", err)
+		}
+	}
+	writeFooter(w, r, st)
+}
+
+// writeHeader will output the standard header
+func writeHeader(w http.ResponseWriter, r *http.Request) {
 	// we are using basic and simple html here. No fancy graphics or css
 	h := `
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
     <html><head><title>dnsseeder</title></head><body>
 	<center>
-	<a href="/statusRG">statusRG</a>   
-	<a href="/statusCG">statusCG</a>   
-	<a href="/statusWG">statusWG</a>   
-	<a href="/statusNG">statusNG</a>   
-	<a href="/dns">DNS</a>
+	<a href="/summary">Summary</a>   
+    </center>
+    <hr>
     <br>
-    <table><tr><td>
-    Twistee Stats (count/started)<br>
-    <table border=1><tr>
-	<td>RG: {{.RG}}/{{.RGS}}</td><td>CG: {{.CG}}/{{.CGS}}</td><td>WG: {{.WG}}/{{.WGS}}</td><td>NG: {{.NG}}/{{.NGS}}</td><td>Total: {{.Total}}</td>
-    </tr></table>
-    </td><td>
-    DNS Requests<br>
-    <table border=1><tr>
-	<td>V4 Std: {{.V4Std}}</td><td>V4 Non: {{.V4Non}}</td><td>V6 Std: {{.V6Std}}</td><td>V6 Non: {{.V6Non}}</td><td>Total: {{.DNSTotal}}</td>
-    </tr></table>
-    </td></tr></table>
-	</center>
-	<hr>
-	`
-
-	t := template.New("Header template")
-	t, err := t.Parse(h)
-	if err != nil {
-		log.Printf("error parsing template %v\n", err)
-	}
-
-	err = t.Execute(w, hc)
-	if err != nil {
-		log.Printf("error executing template %v\n", err)
-	}
-
+`
+	fmt.Fprintf(w, h)
 }
 
-// genFooter will output the standard footer
+// writeFooter will output the standard footer
 func writeFooter(w http.ResponseWriter, r *http.Request, st time.Time) {
 
 	// Footer needs to be exported for template processing to work
@@ -483,7 +536,7 @@ func writeFooter(w http.ResponseWriter, r *http.Request, st time.Time) {
 	</center>
 	</body></html>
 	`
-	Footer.Uptime = time.Since(config.seeder.uptime).String()
+	Footer.Uptime = time.Since(config.uptime).String()
 	Footer.Version = config.version
 	Footer.Rt = time.Since(st).String()
 

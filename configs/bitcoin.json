@@ -1,0 +1,12 @@
+{
+ "Name": "BitcoinNet",
+ "Desc": "Bitcoin Main Net",
+ "Id": "0xd9b4bef9",
+ "Port": 8333,
+ "Pver": 70001,
+ "DNSName": "btcseed.zagbot.com",
+ "TTL": 600,
+ "Seeder1": "dnsseed.bluematt.me",
+ "Seeder2": "bitseed.xf2.org",
+ "Seeder3": "dnsseed.bitcoin.dashjr.org"
+}
