@@ -203,7 +203,7 @@ func updateDNSCounts(name, qtype string) {
 	for _, s := range config.seeders {
 		s.counts.mtx.Lock()
 
-		if name == s.dnsHost || name == "nonstd."+s.dnsHost {
+		if name == s.dnsHost+"." || name == "nonstd."+s.dnsHost+"." {
 			s.counts.DNSCounts[ndType]++
 			counted = true
 		}
