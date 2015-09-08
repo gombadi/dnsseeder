@@ -440,8 +440,10 @@ func summaryHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeHeader(w, r)
-	// loop through each of the seeders
-	for _, s := range config.seeders {
+	// loop through each of the seeder name from a slice so they are always returned in
+	// the same order then get a pointer to the seeder struct
+	for _, n := range config.order {
+		s := config.seeders[n]
 
 		hc.Name = s.name
 		// fill the structs so they can be displayed via the template
@@ -505,16 +507,23 @@ func summaryHandler(w http.ResponseWriter, r *http.Request) {
 // writeHeader will output the standard header
 func writeHeader(w http.ResponseWriter, r *http.Request) {
 	// we are using basic and simple html here. No fancy graphics or css
-	h := `
+	h1 := `
     <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
     <html><head><title>dnsseeder</title></head><body>
 	<center>
 	<a href="/summary">Summary</a>   
-    </center>
-    <hr>
-    <br>
 `
-	fmt.Fprintf(w, h)
+	fmt.Fprintf(w, h1)
+
+	// read the seeder name
+	n := r.FormValue("s")
+	if n != "" {
+		s := getSeederByName(n)
+		if s != nil {
+			fmt.Fprintf(w, "<br><b>Seeder: %s</b>", html.EscapeString(s.name))
+		}
+	}
+	fmt.Fprintf(w, "</center><hr><br>")
 }
 
 // writeFooter will output the standard footer

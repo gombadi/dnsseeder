@@ -390,6 +390,16 @@ func (s *dnsseeder) isFull() bool {
 	return false
 }
 
+// getSeederByName returns a pointer to the seeder based on its name or nil if not found
+func getSeederByName(name string) *dnsseeder {
+	for _, s := range config.seeders {
+		if s.name == name {
+			return s
+		}
+	}
+	return nil
+}
+
 /*
 
  */

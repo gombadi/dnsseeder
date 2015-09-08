@@ -37,6 +37,7 @@ type configData struct {
 	stats      bool                  // stats cmdline option
 	seeders    map[string]*dnsseeder // holds a pointer to all the current seeders
 	smtx       sync.RWMutex          // protect the seeders map
+	order      []string              // the order of loading the netfiles so we can display in this order
 	dns        map[string][]dns.RR   // holds details of all the currently served dns records
 	dnsmtx     sync.RWMutex          // protect the dns map
 	dnsUnknown uint64                // the number of dns requests for we are not configured to handle
@@ -77,6 +78,7 @@ func main() {
 
 	config.seeders = make(map[string]*dnsseeder)
 	config.dns = make(map[string][]dns.RR)
+	config.order = []string{}
 
 	for _, nwFile := range netwFiles {
 		nnw, err := loadNetwork(nwFile)
@@ -87,6 +89,7 @@ func main() {
 		if nnw != nil {
 			// FIXME - lock this
 			config.seeders[nnw.name] = nnw
+			config.order = append(config.order, nnw.name)
 		}
 	}
 
@@ -212,15 +215,6 @@ func updateDNSCounts(name, qtype string) {
 	if counted != true {
 		atomic.AddUint64(&config.dnsUnknown, 1)
 	}
-}
-
-func getSeederByName(name string) *dnsseeder {
-	for _, s := range config.seeders {
-		if s.name == name {
-			return s
-		}
-	}
-	return nil
 }
 
 /*
