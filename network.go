@@ -12,16 +12,19 @@ import (
 
 // JNetwork is the exported struct that is read from the network file
 type JNetwork struct {
-	Name    string
-	Desc    string
-	Id      string
-	Port    uint16
-	Pver    uint32
-	DNSName string
-	TTL     uint32
-	Seeder1 string
-	Seeder2 string
-	Seeder3 string
+	Name       string
+	Desc       string
+	SeederType string
+	Secret     string
+	Remote     string
+	Id         string
+	Port       uint16
+	Pver       uint32
+	DNSName    string
+	TTL        uint32
+	Seeder1    string
+	Seeder2    string
+	Seeder3    string
 }
 
 func createNetFile() {
@@ -29,16 +32,19 @@ func createNetFile() {
 
 	// create a struct to encode with json
 	jnw := &JNetwork{
-		Id:      "0xabcdef01",
-		Port:    1234,
-		Pver:    70001,
-		TTL:     600,
-		DNSName: "seeder.example.com",
-		Name:    "SeederNet",
-		Desc:    "Description of SeederNet",
-		Seeder1: "seeder1.example.com",
-		Seeder2: "seed1.bob.com",
-		Seeder3: "seed2.example.com",
+		Id:         "0xabcdef01",
+		Port:       1234,
+		Pver:       70001,
+		TTL:        600,
+		DNSName:    "seeder.example.com",
+		Name:       "SeederNet",
+		Desc:       "Description of SeederNet",
+		SeederType: "Combined",
+		Secret:     "32bYTesoFSECretThAtiSASecrET!!",
+		Remote:     "ipofdnsserver.example.com:1234",
+		Seeder1:    "seeder1.example.com",
+		Seeder2:    "seed1.bob.com",
+		Seeder3:    "seed2.example.com",
 	}
 
 	f, err := os.Create("dnsseeder.json")
@@ -72,10 +78,10 @@ func loadNetwork(fName string) (*dnsseeder, error) {
 		return nil, errors.New(fmt.Sprintf("Error decoding network file: %v", err))
 	}
 
-	return initNetwork(jnw, jnw.Name)
+	return initNetwork(jnw)
 }
 
-func initNetwork(jnw JNetwork, name string) (*dnsseeder, error) {
+func initNetwork(jnw JNetwork) (*dnsseeder, error) {
 
 	if jnw.Port == 0 {
 		return nil, errors.New(fmt.Sprintf("Invalid port supplied: %v", jnw.Port))
@@ -83,6 +89,10 @@ func initNetwork(jnw JNetwork, name string) (*dnsseeder, error) {
 
 	if jnw.DNSName == "" {
 		return nil, errors.New(fmt.Sprintf("No DNS Hostname supplied"))
+	}
+
+	if ok := checkBlockSize(jnw.Secret); ok != true {
+		return nil, errors.New(fmt.Sprintf("shared secret must be either 16, 24 or 32 bytes long. currently: %v", len(jnw.Secret)))
 	}
 
 	if _, ok := config.seeders[jnw.Name]; ok {
@@ -98,6 +108,9 @@ func initNetwork(jnw JNetwork, name string) (*dnsseeder, error) {
 	seeder.name = jnw.Name
 	seeder.desc = jnw.Desc
 	seeder.dnsHost = jnw.DNSName
+	seeder.seederType = convertSeederType(jnw.SeederType)
+	seeder.secret = jnw.Secret
+	seeder.remote = jnw.Remote
 
 	// conver the network magic number to a Uint32
 	t1, err := strconv.ParseUint(jnw.Id, 0, 32)
@@ -137,6 +150,25 @@ func initNetwork(jnw JNetwork, name string) (*dnsseeder, error) {
 	}
 
 	return seeder, nil
+}
+
+func convertSeederType(seederType string) uint32 {
+	switch seederType {
+	case "Crawl":
+		return typeCrawl
+	case "DNS":
+		return typeDNS
+	default:
+		return typeCombined
+	}
+}
+
+func checkBlockSize(secret string) bool {
+	s := len(secret)
+	if s == 16 || s == 24 || s == 32 {
+		return true
+	}
+	return false
 }
 
 /*
