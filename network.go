@@ -41,7 +41,7 @@ func createNetFile() {
 		Desc:       "Description of SeederNet",
 		SeederType: "Combined",
 		Secret:     "32bYTesoFSECretThAtiSASecrET!!",
-		Remote:     "ipofdnsserver.example.com:1234",
+		Remote:     "http://dnsserver.example.com:1234/updatedns",
 		Seeder1:    "seeder1.example.com",
 		Seeder2:    "seed1.bob.com",
 		Seeder3:    "seed2.example.com",
@@ -91,10 +91,12 @@ func initNetwork(jnw JNetwork) (*dnsseeder, error) {
 		return nil, errors.New(fmt.Sprintf("No DNS Hostname supplied"))
 	}
 
-	if ok := checkBlockSize(jnw.Secret); ok != true {
-		return nil, errors.New(fmt.Sprintf("shared secret must be either 16, 24 or 32 bytes long. currently: %v", len(jnw.Secret)))
+	// we only need a secret if we are a crawler or dns type
+	if needSecret := convertSeederType(jnw.SeederType); needSecret != typeCombined {
+		if ok := checkBlockSize(jnw.Secret); ok != true {
+			return nil, errors.New(fmt.Sprintf("shared secret must be either 16, 24 or 32 bytes long. currently: %v", len(jnw.Secret)))
+		}
 	}
-
 	if _, ok := config.seeders[jnw.Name]; ok {
 		return nil, errors.New(fmt.Sprintf("Name already exists from previous file - %s", jnw.Name))
 	}

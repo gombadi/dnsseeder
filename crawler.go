@@ -39,7 +39,7 @@ func crawlNode(s *dnsseeder, nd *node) {
 	}
 
 	// connect to the remote ip and ask them for their addr list
-	rna, e := crawlIP(s.pver, s.id, nd)
+	rna, e := crawlIP(s.pver, s.id, nd, s.isFull())
 
 	if e != nil {
 		// update the fact that we have not connected to this node
@@ -99,6 +99,8 @@ func crawlNode(s *dnsseeder, nd *node) {
 	nd.statusStr = "ok: received remote address list"
 
 	added := 0
+	// do not accept more than one third of maxSize addresses from one node
+	oneThird := int(float64(s.maxSize / 3))
 
 	// if we are full then skip adding more possible clients
 	if s.isFull() == false {
@@ -106,7 +108,9 @@ func crawlNode(s *dnsseeder, nd *node) {
 		for _, na := range rna {
 			// a new network address so add to the system
 			if x := s.addNa(na); x == true {
-				added++
+				if added++; added > oneThird {
+					break
+				}
 			}
 		}
 	}
@@ -136,7 +140,7 @@ func crawlEnd(nd *node) {
 }
 
 // crawlIP retrievs a slice of ip addresses from a client
-func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node) ([]*wire.NetAddress, *crawlError) {
+func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.NetAddress, *crawlError) {
 
 	ip := nd.na.IP.String()
 	port := strconv.Itoa(int(nd.na.Port))
@@ -221,6 +225,11 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node) ([]*wire.NetAddress, 
 		return nil, &crawlError{"Did not receive expected Ver Ack message from remote client", errors.New("")}
 	}
 
+	// if we get this far and if the seeder is full then don't ask for addresses. This will reduce bandwith usage while still
+	// confirming that we can connect to the remote node
+	if full {
+		return nil, nil
+	}
 	// send getaddr command
 	msgGetAddr := wire.NewMsgGetAddr()
 
