@@ -3,9 +3,20 @@ Go Language dns seeder for Networks that use Bitcoin technology such as the [Twi
 
 It is based on the original c++ seeders created for the Bitcoin network and copied to other similar networks.
 
-This application can seed one or more networks on the same ip address. At the moment there are config files for the Twister and Bitcoin networks. You use the -netfile commandline option to specify one or more comma seperated filenames to load the network configuration for that network.
+## Features
 
-You can use the -j option to produce a sample json network config file (dnsseeder.json) in the current directory and then edit the file to seed your own network.
+* Supports multiple networks. You can run multiple seeders off one ip address.
+* Uses Go Language so it can easily be compiled and run on multiple platforms.
+* Minimal resource requirements. Will easily seed multiple networks on a Raspberry Pi 1 Mobel B+
+* Restricts the number of addresses accepted from any one node.
+* Cycle through working nodes to keep the active list fresh
+* Reduces bandwidth usage on nodes if it has many working nodes already in the system.
+* Ability to generate and edit your own seeder config file to support new networks.
+
+### Planned features
+
+* Support remote crawlers. Run the DNS seeder on one system and the crawlers on a different system.
+
 
 Also see the associated utility to display information about [non-standard ip addresses](https://github.com/gombadi/nonstd/)
 
