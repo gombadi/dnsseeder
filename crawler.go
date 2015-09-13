@@ -30,7 +30,8 @@ func crawlNode(s *dnsseeder, nd *node) {
 	defer crawlEnd(nd)
 
 	if config.debug {
-		log.Printf("debug - start crawl: node %s status: %v:%v lastcrawl: %s\n",
+		log.Printf("%s - debug - start crawl: node %s status: %v:%v lastcrawl: %s\n",
+			s.name,
 			net.JoinHostPort(nd.na.IP.String(),
 				strconv.Itoa(int(nd.na.Port))),
 			nd.status,
@@ -39,7 +40,7 @@ func crawlNode(s *dnsseeder, nd *node) {
 	}
 
 	// connect to the remote ip and ask them for their addr list
-	rna, e := crawlIP(s.pver, s.id, nd, s.isFull())
+	rna, e := s.crawlIP(nd)
 
 	if e != nil {
 		// update the fact that we have not connected to this node
@@ -140,7 +141,7 @@ func crawlEnd(nd *node) {
 }
 
 // crawlIP retrievs a slice of ip addresses from a client
-func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.NetAddress, *crawlError) {
+func (s *dnsseeder) crawlIP(nd *node) ([]*wire.NetAddress, *crawlError) {
 
 	ip := nd.na.IP.String()
 	port := strconv.Itoa(int(nd.na.Port))
@@ -150,14 +151,14 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.N
 	conn, err := net.DialTimeout("tcp", dialString, time.Second*10)
 	if err != nil {
 		if config.debug {
-			log.Printf("debug - Could not connect to %s - %v\n", ip, err)
+			log.Printf("%s - debug - Could not connect to %s - %v\n", s.name, ip, err)
 		}
 		return nil, &crawlError{"", err}
 	}
 
 	defer conn.Close()
 	if config.debug {
-		log.Printf("debug - Connected to remote address: %s Last connect was %v ago\n", ip, time.Since(nd.lastConnect).String())
+		log.Printf("%s - debug - Connected to remote address: %s Last connect was %v ago\n", s.name, ip, time.Since(nd.lastConnect).String())
 	}
 
 	// set a deadline for all comms to be done by. After this all i/o will error
@@ -170,14 +171,14 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.N
 		return nil, &crawlError{"Create NewMsgVersionFromConn", err}
 	}
 
-	err = wire.WriteMessage(conn, msgver, pver, netID)
+	err = wire.WriteMessage(conn, msgver, s.pver, s.id)
 	if err != nil {
 		// Log and handle the error
 		return nil, &crawlError{"Write Version Message", err}
 	}
 
 	// first message received should be version
-	msg, _, err := wire.ReadMessage(conn, pver, netID)
+	msg, _, err := wire.ReadMessage(conn, s.pver, s.id)
 	if err != nil {
 		// Log and handle the error
 		return nil, &crawlError{"Read message after sending Version", err}
@@ -187,7 +188,7 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.N
 	case *wire.MsgVersion:
 		// The message is a pointer to a MsgVersion struct.
 		if config.debug {
-			log.Printf("%s - Remote version: %v\n", ip, msg.ProtocolVersion)
+			log.Printf("%s - debug - %s - Remote version: %v\n", s.name, ip, msg.ProtocolVersion)
 		}
 		// fill the node struct with the remote details
 		nd.version = msg.ProtocolVersion
@@ -205,13 +206,13 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.N
 	// send verack command
 	msgverack := wire.NewMsgVerAck()
 
-	err = wire.WriteMessage(conn, msgverack, pver, netID)
+	err = wire.WriteMessage(conn, msgverack, s.pver, s.id)
 	if err != nil {
 		return nil, &crawlError{"writing message VerAck", err}
 	}
 
 	// second message received should be verack
-	msg, _, err = wire.ReadMessage(conn, pver, netID)
+	msg, _, err = wire.ReadMessage(conn, s.pver, s.id)
 	if err != nil {
 		return nil, &crawlError{"reading expected Ver Ack from remote client", err}
 	}
@@ -219,7 +220,7 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.N
 	switch msg.(type) {
 	case *wire.MsgVerAck:
 		if config.debug {
-			log.Printf("%s - received Version Ack\n", ip)
+			log.Printf("%s - debug - %s - received Version Ack\n", s.name, ip)
 		}
 	default:
 		return nil, &crawlError{"Did not receive expected Ver Ack message from remote client", errors.New("")}
@@ -227,13 +228,13 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.N
 
 	// if we get this far and if the seeder is full then don't ask for addresses. This will reduce bandwith usage while still
 	// confirming that we can connect to the remote node
-	if full {
+	if s.isFull() {
 		return nil, nil
 	}
 	// send getaddr command
 	msgGetAddr := wire.NewMsgGetAddr()
 
-	err = wire.WriteMessage(conn, msgGetAddr, pver, netID)
+	err = wire.WriteMessage(conn, msgGetAddr, s.pver, s.id)
 	if err != nil {
 		return nil, &crawlError{"writing Addr message to remote client", err}
 	}
@@ -245,19 +246,19 @@ func crawlIP(pver uint32, netID wire.BitcoinNet, nd *node, full bool) ([]*wire.N
 		// Using the Bitcoin lib for the some networks means it does not understand some
 		// of the commands and will error. We can ignore these as we are only
 		// interested in the addr message and its content.
-		msgaddr, _, _ := wire.ReadMessage(conn, pver, netID)
+		msgaddr, _, _ := wire.ReadMessage(conn, s.pver, s.id)
 		if msgaddr != nil {
 			switch msg := msgaddr.(type) {
 			case *wire.MsgAddr:
 				// received the addr message so return the result
 				if config.debug {
-					log.Printf("%s - received valid addr message\n", ip)
+					log.Printf("%s - debug - %s - received valid addr message\n", s.name, ip)
 				}
 				dowhile = false
 				return msg.AddrList, nil
 			default:
 				if config.debug {
-					log.Printf("%s - ignoring message - %v\n", ip, msg.Command())
+					log.Printf("%s - debug - %s - ignoring message - %v\n", s.name, ip, msg.Command())
 				}
 			}
 		}

@@ -51,7 +51,7 @@ func main() {
 	var j bool
 
 	// FIXME - update with git hash during build
-	config.version = "0.6.0"
+	config.version = "0.8.0"
 	config.uptime = time.Now()
 
 	flag.StringVar(&netfile, "netfile", "", "List of json config files to load")
@@ -101,12 +101,12 @@ func main() {
 		config.stats = true
 	}
 
+	for _, v := range config.seeders {
+		log.Printf("status - system is configured for network: %s\n", v.name)
+	}
+
 	if config.verbose == false {
 		log.Printf("status - Running in quiet mode with limited output produced\n")
-	} else {
-		for _, v := range config.seeders {
-			log.Printf("status - system is configured for network: %s\n", v.name)
-		}
 	}
 
 	// start the web interface if we want it running

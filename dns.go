@@ -101,8 +101,19 @@ func updateDNS(s *dnsseeder) {
 
 	config.dnsmtx.Unlock()
 
-	if config.debug {
-		log.Printf("debug - DNS update complete - rr4std: %v rr4non: %v rr6std: %v rr6non: %v\n", len(rr4std), len(rr4non), len(rr6std), len(rr6non))
+	if config.stats {
+		s.counts.mtx.RLock()
+		log.Printf("%s - DNS available: v4std: %v v4non: %v v6std: %v v6non: %v\n", s.name, len(rr4std), len(rr4non), len(rr6std), len(rr6non))
+		log.Printf("%s - DNS counts: v4std: %v v4non: %v v6std: %v v6non: %v total: %v\n",
+			s.name,
+			s.counts.DNSCounts[dnsV4Std],
+			s.counts.DNSCounts[dnsV4Non],
+			s.counts.DNSCounts[dnsV6Std],
+			s.counts.DNSCounts[dnsV6Non],
+			s.counts.DNSCounts[dnsV4Std]+s.counts.DNSCounts[dnsV4Non]+s.counts.DNSCounts[dnsV6Std]+s.counts.DNSCounts[dnsV6Non])
+
+		s.counts.mtx.RUnlock()
+
 	}
 }
 

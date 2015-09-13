@@ -117,7 +117,7 @@ func (s *dnsseeder) startCrawlers() {
 	tcount := len(s.theList)
 	if tcount == 0 {
 		if config.debug {
-			log.Printf("debug - startCrawlers fail: no node ailable\n")
+			log.Printf("%s - debug - startCrawlers fail: no node ailable\n", s.name)
 		}
 		return
 	}
@@ -171,14 +171,18 @@ func (s *dnsseeder) startCrawlers() {
 			c.started++
 		}
 
-		log.Printf("%s: started crawler: %s total: %v started: %v\n", s.name, c.desc, c.totalCount, c.started)
+		if config.stats {
+			log.Printf("%s: started crawler: %s total: %v started: %v\n", s.name, c.desc, c.totalCount, c.started)
+		}
 
 		// update the global stats in another goroutine to free the main goroutine
 		// for other work
 		go updateNodeCounts(s, c.status, c.totalCount, c.started)
 	}
 
-	log.Printf("%s: crawlers started. total clients: %d\n", s.name, tcount)
+	if config.stats {
+		log.Printf("%s: crawlers started. total clients: %d\n", s.name, tcount)
+	}
 
 	// returns and read lock released
 }
