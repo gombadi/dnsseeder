@@ -274,7 +274,7 @@ func (s *dnsseeder) addNa(nNa *wire.NetAddress) bool {
 func getNonStdIP(rip net.IP, port uint16) net.IP {
 
 	b := []byte{0x0, 0x0, 0x0, 0x0}
-	crcAddr := crc16(rip)
+	crcAddr := crc16(rip.To4())
 	b[0] = byte(crcAddr >> 8)
 	b[1] = byte((crcAddr & 0xff))
 	b[2] = byte(port >> 8)
