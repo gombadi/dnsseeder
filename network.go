@@ -87,10 +87,6 @@ func initNetwork(jnw JNetwork) (*dnsseeder, error) {
 		return nil, errors.New(fmt.Sprintf("No DNS Hostname supplied"))
 	}
 
-	if _, ok := config.seeders[jnw.Name]; ok {
-		return nil, errors.New(fmt.Sprintf("Name already exists from previous file - %s", jnw.Name))
-	}
-
 	// init the seeder
 	seeder := &dnsseeder{}
 	seeder.theList = make(map[string]*node)
@@ -130,14 +126,9 @@ func initNetwork(jnw JNetwork) (*dnsseeder, error) {
 	if seeder.ttl < 60 {
 		seeder.ttl = 60
 	}
-	// check for duplicates
-	for _, v := range config.seeders {
-		if v.id == seeder.id {
-			return nil, errors.New(fmt.Sprintf("Duplicate Magic id. Already loaded for %s so can not be used for %s", v.id, v.name, seeder.name))
-		}
-		if v.dnsHost == seeder.dnsHost {
-			return nil, errors.New(fmt.Sprintf("Duplicate DNS names. Already loaded %s for %s so can not be used for %s", v.dnsHost, v.name, seeder.name))
-		}
+
+	if dup, err := isDuplicateSeeder(seeder); dup == true {
+		return nil, err
 	}
 
 	return seeder, nil
