@@ -416,10 +416,10 @@ func isDuplicateSeeder(s *dnsseeder) (bool, error) {
 	// check for duplicate seeders with the same details
 	for _, v := range config.seeders {
 		if v.id == s.id {
-			return true, errors.New(fmt.Sprintf("Duplicate Magic id. Already loaded for %s so can not be used for %s", v.id, v.name, s.name))
+			return true, fmt.Errorf("Duplicate Magic id. Already loaded for %s so can not be used for %s", v.id, v.name, s.name)
 		}
 		if v.dnsHost == s.dnsHost {
-			return true, errors.New(fmt.Sprintf("Duplicate DNS names. Already loaded %s for %s so can not be used for %s", v.dnsHost, v.name, s.name))
+			return true, fmt.Errorf("Duplicate DNS names. Already loaded %s for %s so can not be used for %s", v.dnsHost, v.name, s.name)
 		}
 	}
 	return false, nil
@@ -427,4 +427,4 @@ func isDuplicateSeeder(s *dnsseeder) (bool, error) {
 
 /*
 
-*/
+ */

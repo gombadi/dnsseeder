@@ -18,7 +18,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-// ndCounts holds various statistics about the running system
+// NodeCounts holds various statistics about the running system for use in html templates
 type NodeCounts struct {
 	NdStatus  []uint32     // number of nodes at each of the 4 statuses - RG, CG, WG, NG
 	NdStarts  []uint32     // number of crawles started last startcrawlers run

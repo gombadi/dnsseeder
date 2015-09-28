@@ -14,7 +14,7 @@ import (
 type JNetwork struct {
 	Name      string
 	Desc      string
-	Id        string
+	ID        string
 	Port      uint16
 	Pver      uint32
 	DNSName   string
@@ -30,7 +30,7 @@ func createNetFile() {
 
 	// create a struct to encode with json
 	jnw := &JNetwork{
-		Id:        "0xabcdef01",
+		ID:        "0xabcdef01",
 		Port:      1234,
 		Pver:      70001,
 		TTL:       600,
@@ -62,7 +62,7 @@ func createNetFile() {
 func loadNetwork(fName string) (*dnsseeder, error) {
 	nwFile, err := os.Open(fName)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error reading network file: %v", err))
+		return nil, fmt.Errorf("Error reading network file: %v", err)
 	}
 
 	defer nwFile.Close()
@@ -71,7 +71,7 @@ func loadNetwork(fName string) (*dnsseeder, error) {
 
 	jsonParser := json.NewDecoder(nwFile)
 	if err = jsonParser.Decode(&jnw); err != nil {
-		return nil, errors.New(fmt.Sprintf("Error decoding network file: %v", err))
+		return nil, fmt.Errorf("Error decoding network file: %v", err)
 	}
 
 	return initNetwork(jnw)
@@ -80,11 +80,12 @@ func loadNetwork(fName string) (*dnsseeder, error) {
 func initNetwork(jnw JNetwork) (*dnsseeder, error) {
 
 	if jnw.Port == 0 {
-		return nil, errors.New(fmt.Sprintf("Invalid port supplied: %v", jnw.Port))
+		return nil, fmt.Errorf("Invalid port supplied: %v", jnw.Port)
+
 	}
 
 	if jnw.DNSName == "" {
-		return nil, errors.New(fmt.Sprintf("No DNS Hostname supplied"))
+		return nil, fmt.Errorf("No DNS Hostname supplied")
 	}
 
 	// init the seeder
@@ -98,9 +99,9 @@ func initNetwork(jnw JNetwork) (*dnsseeder, error) {
 	seeder.dnsHost = jnw.DNSName
 
 	// conver the network magic number to a Uint32
-	t1, err := strconv.ParseUint(jnw.Id, 0, 32)
+	t1, err := strconv.ParseUint(jnw.ID, 0, 32)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("Error converting Network Magic number: %v", err))
+		return nil, fmt.Errorf("Error converting Network Magic number: %v", err)
 	}
 	seeder.id = wire.BitcoinNet(t1)
 

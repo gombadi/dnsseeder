@@ -9,7 +9,7 @@ import (
 
 func TestGetNonStdIP(t *testing.T) {
 
-	var ip_tests = []struct {
+	var iptests = []struct {
 		rip   string
 		port  uint16
 		encip string
@@ -20,10 +20,10 @@ func TestGetNonStdIP(t *testing.T) {
 		{"123.213.132.231", 34, "12.91.0.34"},
 	}
 
-	for _, x := range ip_tests {
-		newip := getNonStdIP(net.ParseIP(x.rip), x.port)
-		if newip.String() != x.encip {
-			t.Errorf("real-ip: %s real-port: %v encoded-ip: %v expected-ip: %s", x.rip, x.port, newip, x.encip)
+	for _, atest := range iptests {
+		newip := getNonStdIP(net.ParseIP(atest.rip), atest.port)
+		if newip.String() != atest.encip {
+			t.Errorf("real-ip: %s real-port: %v encoded-ip: %v expected-ip: %s", atest.rip, atest.port, newip, atest.encip)
 		}
 	}
 }
@@ -46,11 +46,11 @@ func TestAddnNa(t *testing.T) {
 	}
 	s.theList = make(map[string]*node)
 
-	for _, x := range td {
+	for _, atest := range td {
 		// Test NewNetAddress.
 		tcpAddr := &net.TCPAddr{
-			IP:   net.ParseIP(x.ip),
-			Port: x.port,
+			IP:   net.ParseIP(atest.ip),
+			Port: atest.port,
 		}
 		na, _ := wire.NewNetAddress(tcpAddr, 0)
 		ndName := net.JoinHostPort(na.IP.String(), strconv.Itoa(int(na.Port)))
@@ -59,8 +59,8 @@ func TestAddnNa(t *testing.T) {
 		if result != true {
 			t.Errorf("failed to create new node: %s", ndName)
 		}
-		if s.theList[ndName].dnsType != x.dnsType {
-			t.Errorf("node: %s dnsType:%v expected: %v", ndName, s.theList[ndName].dnsType, x.dnsType)
+		if s.theList[ndName].dnsType != atest.dnsType {
+			t.Errorf("node: %s dnsType:%v expected: %v", ndName, s.theList[ndName].dnsType, atest.dnsType)
 		}
 	}
 
