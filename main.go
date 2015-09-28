@@ -87,7 +87,6 @@ func main() {
 			os.Exit(1)
 		}
 		if nnw != nil {
-			// FIXME - lock this
 			config.seeders[nnw.name] = nnw
 			config.order = append(config.order, nnw.name)
 		}
@@ -145,7 +144,6 @@ func main() {
 				log.Printf("debug - Audit nodes timer triggered\n")
 			}
 			for _, s := range config.seeders {
-				// FIXME goroutines for these
 				s.auditNodes()
 			}
 		case <-dnsChan:

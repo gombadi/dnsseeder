@@ -393,6 +393,9 @@ func (s *dnsseeder) loadDNS() {
 
 // isFull returns true if the number of remote clients is more than we want to store
 func (s *dnsseeder) isFull() bool {
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
 	if len(s.theList) > s.maxSize {
 		return true
 	}

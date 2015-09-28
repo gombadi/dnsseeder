@@ -136,8 +136,6 @@ func crawlNode(s *dnsseeder, nd *node) {
 // crawlEnd is a deffered func to update theList after a crawl is all done
 func crawlEnd(nd *node) {
 	nd.crawlActive = false
-	// FIXME - scan for long term crawl active node. Dial timeout is 10 seconds
-	// so should be done in under 5 minutes
 }
 
 // crawlIP retrievs a slice of ip addresses from a client
