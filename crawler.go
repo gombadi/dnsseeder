@@ -22,129 +22,45 @@ func (e *crawlError) Error() string {
 
 // crawlNode runs in a goroutine, crawls the remote ip and updates the master
 // list of currently active addresses
-func crawlNode(s *dnsseeder, nd *node) {
+func crawlNode(rc chan *result, s *dnsseeder, nd *node) {
 
-	nd.crawlActive = true
-	nd.crawlStart = time.Now()
+	// connect to the remote ip and ask them for their addr list
+	rna, e := crawlIP(s, nd)
 
-	defer crawlEnd(nd)
+	res := &result{
+		nas:  rna,
+		msg:  e,
+		node: net.JoinHostPort(nd.na.IP.String(), strconv.Itoa(int(nd.na.Port))),
+	}
+
+	if e != nil {
+		res.success = true
+	}
+
+	// all done so push the result back to the seeder.
+	//This will block until the seeder reads the result
+	rc <- res
+
+	// goroutine will end and be cleaned up
+}
+
+// crawlIP retrievs a slice of ip addresses from a client
+func crawlIP(s *dnsseeder, nd *node) ([]*wire.NetAddress, *crawlError) {
+
+	ip := nd.na.IP.String()
+	port := strconv.Itoa(int(nd.na.Port))
+
+	// get correct formatting for ipv6 addresses
+	dialString := net.JoinHostPort(ip, port)
 
 	if config.debug {
 		log.Printf("%s - debug - start crawl: node %s status: %v:%v lastcrawl: %s\n",
 			s.name,
-			net.JoinHostPort(nd.na.IP.String(),
-				strconv.Itoa(int(nd.na.Port))),
+			dialString,
 			nd.status,
 			nd.rating,
 			time.Since(nd.crawlStart).String())
 	}
-
-	// connect to the remote ip and ask them for their addr list
-	rna, e := s.crawlIP(nd)
-
-	if e != nil {
-		// update the fact that we have not connected to this node
-		nd.lastTry = time.Now()
-		nd.connectFails++
-		nd.statusStr = e.Error()
-
-		// update the status of this failed node
-		switch nd.status {
-		case statusRG:
-			// if we are full then any RG failures will skip directly to NG
-			if s.isFull() {
-				nd.status = statusNG // not able to connect to this node so ignore
-				nd.statusTime = time.Now()
-			} else {
-				if nd.rating += 25; nd.rating > 30 {
-					nd.status = statusWG
-					nd.statusTime = time.Now()
-				}
-			}
-		case statusCG:
-			if nd.rating += 25; nd.rating >= 50 {
-				nd.status = statusWG
-				nd.statusTime = time.Now()
-			}
-		case statusWG:
-			if nd.rating += 15; nd.rating >= 100 {
-				nd.status = statusNG // not able to connect to this node so ignore
-				nd.statusTime = time.Now()
-			}
-		}
-		// no more to do so return which will shutdown the goroutine & call
-		// the deffered cleanup
-		if config.verbose {
-			log.Printf("%s: failed crawl node: %s s:r:f: %v:%v:%v %s\n",
-				s.name,
-				net.JoinHostPort(nd.na.IP.String(),
-					strconv.Itoa(int(nd.na.Port))),
-				nd.status,
-				nd.rating,
-				nd.connectFails,
-				nd.statusStr)
-		}
-		return
-	}
-
-	// succesful connection and addresses received so mark status
-	if nd.status != statusCG {
-		nd.status = statusCG
-		nd.statusTime = time.Now()
-	}
-	cs := nd.lastConnect
-	nd.rating = 0
-	nd.connectFails = 0
-	nd.lastConnect = time.Now()
-	nd.lastTry = time.Now()
-	nd.statusStr = "ok: received remote address list"
-
-	added := 0
-	// do not accept more than one third of maxSize addresses from one node
-	oneThird := int(float64(s.maxSize / 3))
-
-	// if we are full then skip adding more possible clients
-	if s.isFull() == false {
-		// loop through all the received network addresses and add to thelist if not present
-		for _, na := range rna {
-			// a new network address so add to the system
-			if x := s.addNa(na); x == true {
-				if added++; added > oneThird {
-					break
-				}
-			}
-		}
-	}
-
-	if config.verbose {
-		log.Printf("%s: crawl done: node: %s s:r:f: %v:%v:%v addr: %v:%v CrawlTime: %s Last connect: %v ago\n",
-			s.name,
-			net.JoinHostPort(nd.na.IP.String(),
-				strconv.Itoa(int(nd.na.Port))),
-			nd.status,
-			nd.rating,
-			nd.connectFails,
-			len(rna),
-			added,
-			time.Since(nd.crawlStart).String(),
-			time.Since(cs).String())
-	}
-
-	// goroutine ends. deffered cleanup runs
-}
-
-// crawlEnd is a deffered func to update theList after a crawl is all done
-func crawlEnd(nd *node) {
-	nd.crawlActive = false
-}
-
-// crawlIP retrievs a slice of ip addresses from a client
-func (s *dnsseeder) crawlIP(nd *node) ([]*wire.NetAddress, *crawlError) {
-
-	ip := nd.na.IP.String()
-	port := strconv.Itoa(int(nd.na.Port))
-	// get correct formatting for ipv6 addresses
-	dialString := net.JoinHostPort(ip, port)
 
 	conn, err := net.DialTimeout("tcp", dialString, time.Second*10)
 	if err != nil {

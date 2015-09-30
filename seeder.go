@@ -62,6 +62,14 @@ type dnsseeder struct {
 	maxStart  []uint32         // max number of goroutines to start each run for each status type
 	delay     []int64          // number of seconds to wait before we connect to a known client for each status
 	counts    NodeCounts       // structure to hold stats for this seeder
+	shutdown  bool             // seeder is shutting down
+}
+
+type result struct {
+	nas     []*wire.NetAddress // slice of node addresses returned from a node
+	msg     *crawlError        // error string or nil if no problems
+	node    string             // theList key to the node that was crawled
+	success bool               // was the crawl successful
 }
 
 // initCrawlers needs to be run before the startCrawlers so it can get
@@ -113,9 +121,51 @@ func (s *dnsseeder) initCrawlers() {
 	}
 }
 
+// runSeeder runs a seeder in an endless goroutine
+func (s *dnsseeder) runSeeder(done <-chan struct{}, wg *sync.WaitGroup) {
+
+	defer wg.Done()
+
+	// receive the results from the crawl goroutines
+	resultsChan := make(chan *result)
+
+	// start initial scan now
+	s.startCrawlers(resultsChan)
+
+	// used to cleanout and cycle records in theList
+	auditChan := time.NewTicker(time.Minute * auditDelay).C
+	// used to start crawlers on a regular basis
+	crawlChan := time.NewTicker(time.Second * crawlDelay).C
+	// extract good dns records from all nodes on regular basis
+	dnsChan := time.NewTicker(time.Second * dnsDelay).C
+
+	dowhile := true
+	for dowhile == true {
+		select {
+		case r := <-resultsChan:
+			// process a results structure from a crawl
+			s.processResult(r)
+		case <-dnsChan:
+			// update the system with the latest selection of dns records
+			s.loadDNS()
+		case <-auditChan:
+			// keep theList clean and tidy
+			s.auditNodes()
+		case <-crawlChan:
+			// start a scan to crawl nodes
+			s.startCrawlers(resultsChan)
+		case <-done:
+			// done channel closed so exit the select and shutdown the seeder
+			dowhile = false
+		}
+	}
+	fmt.Printf(".")
+	// end the goroutine & defer will call wg.Done()
+}
+
 // startCrawlers is called on a time basis to start maxcrawlers new
 // goroutines if there are spare goroutine slots available
-func (s *dnsseeder) startCrawlers() {
+func (s *dnsseeder) startCrawlers(resultsChan chan *result) {
 
 	tcount := len(s.theList)
 	if tcount == 0 {
@@ -169,8 +219,10 @@ func (s *dnsseeder) startCrawlers() {
 				continue
 			}
 
+			nd.crawlActive = true
+			nd.crawlStart = time.Now()
 			// all looks good so start a go routine to crawl the remote node
-			go crawlNode(s, nd)
+			go crawlNode(resultsChan, s, nd)
 			c.started++
 		}
 
@@ -188,6 +240,115 @@ func (s *dnsseeder) startCrawlers() {
 	}
 
 	// returns and read lock released
+}
+
+// processResult will add new nodes to the list and update the status of the crawled node
+func (s *dnsseeder) processResult(r *result) {
+
+	var nd *node
+
+	if _, ok := s.theList[r.node]; ok {
+		nd = s.theList[r.node]
+	} else {
+		log.Printf("%s: warning - ignoring results from unknown node: %s\n", s.name, r.node)
+		return
+	}
+
+	defer crawlEnd(nd)
+
+	//if r.success != true {
+	if r.msg != nil {
+		// update the fact that we have not connected to this node
+		nd.lastTry = time.Now()
+		nd.connectFails++
+		nd.statusStr = r.msg.Error()
+
+		// update the status of this failed node
+		switch nd.status {
+		case statusRG:
+			// if we are full then any RG failures will skip directly to NG
+			if s.isFull() {
+				nd.status = statusNG // not able to connect to this node so ignore
+				nd.statusTime = time.Now()
+			} else {
+				if nd.rating += 25; nd.rating > 30 {
+					nd.status = statusWG
+					nd.statusTime = time.Now()
+				}
+			}
+		case statusCG:
+			if nd.rating += 25; nd.rating >= 50 {
+				nd.status = statusWG
+				nd.statusTime = time.Now()
+			}
+		case statusWG:
+			if nd.rating += 15; nd.rating >= 100 {
+				nd.status = statusNG // not able to connect to this node so ignore
+				nd.statusTime = time.Now()
+			}
+		}
+		// no more to do so return which will shutdown the goroutine & call
+		// the deffered cleanup
+		if config.verbose {
+			log.Printf("%s: failed crawl node: %s s:r:f: %v:%v:%v %s\n",
+				s.name,
+				net.JoinHostPort(nd.na.IP.String(),
+					strconv.Itoa(int(nd.na.Port))),
+				nd.status,
+				nd.rating,
+				nd.connectFails,
+				nd.statusStr)
+		}
+		return
+	}
+
+	// succesful connection and addresses received so mark status
+	if nd.status != statusCG {
+		nd.status = statusCG
+		nd.statusTime = time.Now()
+	}
+	cs := nd.lastConnect
+	nd.rating = 0
+	nd.connectFails = 0
+	nd.lastConnect = time.Now()
+	nd.lastTry = time.Now()
+	nd.statusStr = "ok: received remote address list"
+
+	added := 0
+	// do not accept more than one third of maxSize addresses from one node
+	oneThird := int(float64(s.maxSize / 3))
+
+	// if we are full then skip adding more possible clients
+	if s.isFull() == false {
+		// loop through all the received network addresses and add to thelist if not present
+		for _, na := range r.nas {
+			// a new network address so add to the system
+			if x := s.addNa(na); x == true {
+				if added++; added > oneThird {
+					break
+				}
+			}
+		}
+	}
+
+	if config.verbose {
+		log.Printf("%s: crawl done: node: %s s:r:f: %v:%v:%v addr: %v:%v CrawlTime: %s Last connect: %v ago\n",
+			s.name,
+			net.JoinHostPort(nd.na.IP.String(),
+				strconv.Itoa(int(nd.na.Port))),
+			nd.status,
+			nd.rating,
+			nd.connectFails,
+			len(r.nas),
+			added,
+			time.Since(nd.crawlStart).String(),
+			time.Since(cs).String())
+	}
+
+}
+
+func crawlEnd(nd *node) {
+	nd.crawlActive = false
 }
 
 // isDup will return true or false depending if the ip exists in theList

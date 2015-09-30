@@ -14,17 +14,17 @@ type node struct {
 	lastTry      time.Time        // last time we tried to connect to this client
 	crawlStart   time.Time        // time when we started the last crawl
 	statusTime   time.Time        // time the status was last updated
-	crawlActive  bool             // are we currently crawling this client
-	connectFails uint32           // number of times we have failed to connect to this client
+	nonstdIP     net.IP           // if not using the default port then this is the encoded ip containing the actual port
 	statusStr    string           // string with last error or OK details
-	version      int32            // remote client protocol version
 	strVersion   string           // remote client user agent
 	services     wire.ServiceFlag // remote client supported services
+	connectFails uint32           // number of times we have failed to connect to this client
+	version      int32            // remote client protocol version
 	lastBlock    int32            // remote client last block
 	status       uint32           // rg,cg,wg,ng
 	rating       uint32           // if it reaches 100 then we mark them statusNG
-	nonstdIP     net.IP           // if not using the default port then this is the encoded ip containing the actual port
 	dnsType      uint32           // what dns type this client is
+	crawlActive  bool             // are we currently crawling this client
 }
 
 // status2str will return the string description of the status

@@ -28,19 +28,19 @@ type NodeCounts struct {
 
 // configData holds information on the application
 type configData struct {
+	dnsUnknown uint64                // the number of dns requests for we are not configured to handle
 	uptime     time.Time             // application start time
 	port       string                // port for the dns server to listen on
 	http       string                // port for the web server to listen on
 	version    string                // application version
-	verbose    bool                  // verbose output cmdline option
-	debug      bool                  // debug cmdline option
-	stats      bool                  // stats cmdline option
 	seeders    map[string]*dnsseeder // holds a pointer to all the current seeders
 	smtx       sync.RWMutex          // protect the seeders map
 	order      []string              // the order of loading the netfiles so we can display in this order
 	dns        map[string][]dns.RR   // holds details of all the currently served dns records
 	dnsmtx     sync.RWMutex          // protect the dns map
-	dnsUnknown uint64                // the number of dns requests for we are not configured to handle
+	verbose    bool                  // verbose output cmdline option
+	debug      bool                  // debug cmdline option
+	stats      bool                  // stats cmdline option
 }
 
 var config configData
@@ -50,7 +50,6 @@ func main() {
 
 	var j bool
 
-	// FIXME - update with git hash during build
 	config.version = "0.8.0"
 	config.uptime = time.Now()
 
@@ -118,51 +117,28 @@ func main() {
 	go serve("udp", config.port)
 	//go serve("tcp", config.port)
 
-	// seed the seeder with some ip addresses
+	var wg sync.WaitGroup
+
+	done := make(chan struct{})
+	// start a goroutine for each seeder
 	for _, s := range config.seeders {
 		s.initCrawlers()
-		s.startCrawlers()
+		wg.Add(1)
+		go s.runSeeder(done, &wg)
 	}
 
-	sig := make(chan os.Signal)
+	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
-	// extract good dns records from all nodes on regular basis
-	dnsChan := time.NewTicker(time.Second * dnsDelay).C
-	// used to start crawlers on a regular basis
-	crawlChan := time.NewTicker(time.Second * crawlDelay).C
-	// used to remove old statusNG nodes that have reached fail count
-	auditChan := time.NewTicker(time.Minute * auditDelay).C
+	// block until a signal is received
+	fmt.Println("\nShutting down on signal:", <-sig)
 
-	dowhile := true
-	for dowhile == true {
-		select {
-		case <-sig:
-			dowhile = false
-		case <-auditChan:
-			if config.debug {
-				log.Printf("debug - Audit nodes timer triggered\n")
-			}
-			for _, s := range config.seeders {
-				s.auditNodes()
-			}
-		case <-dnsChan:
-			if config.debug {
-				log.Printf("debug - DNS - Updating latest ip addresses timer triggered\n")
-			}
-			for _, s := range config.seeders {
-				s.loadDNS()
-			}
-		case <-crawlChan:
-			if config.debug {
-				log.Printf("debug - Start crawlers timer triggered\n")
-			}
-			for _, s := range config.seeders {
-				s.startCrawlers()
-			}
-		}
-	}
 	// FIXME - call dns server.Shutdown()
+
+	// close the done channel to signal to all seeders to shutdown
+	// and wait for them to exit
+	close(done)
+	wg.Wait()
 	fmt.Printf("\nProgram exiting. Bye\n")
 }
 
