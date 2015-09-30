@@ -122,7 +122,6 @@ func main() {
 	done := make(chan struct{})
 	// start a goroutine for each seeder
 	for _, s := range config.seeders {
-		s.initCrawlers()
 		wg.Add(1)
 		go s.runSeeder(done, &wg)
 	}

@@ -128,14 +128,15 @@ func (s *dnsseeder) runSeeder(done <-chan struct{}, wg *sync.WaitGroup) {
 	// receive the results from the crawl goroutines
 	resultsChan := make(chan *result)
 
-	// start initial scan now
+	// load data from other seeders so we can start crawling nodes
+	s.initCrawlers()
+
+	// start initial scan now so we don't have to wait for the timers to fire
 	s.startCrawlers(resultsChan)
 
-	// used to cleanout and cycle records in theList
+	// create timing channels for regular tasks
 	auditChan := time.NewTicker(time.Minute * auditDelay).C
-	// used to start crawlers on a regular basis
 	crawlChan := time.NewTicker(time.Second * crawlDelay).C
-	// extract good dns records from all nodes on regular basis
 	dnsChan := time.NewTicker(time.Second * dnsDelay).C
 
 	dowhile := true
