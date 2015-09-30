@@ -62,7 +62,6 @@ type dnsseeder struct {
 	maxStart  []uint32         // max number of goroutines to start each run for each status type
 	delay     []int64          // number of seconds to wait before we connect to a known client for each status
 	counts    NodeCounts       // structure to hold stats for this seeder
-	shutdown  bool             // seeder is shutting down
 }
 
 type result struct {
@@ -167,7 +166,10 @@ func (s *dnsseeder) runSeeder(done <-chan struct{}, wg *sync.WaitGroup) {
 // goroutines if there are spare goroutine slots available
 func (s *dnsseeder) startCrawlers(resultsChan chan *result) {
 
-	tcount := len(s.theList)
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	tcount := uint32(len(s.theList))
 	if tcount == 0 {
 		if config.debug {
 			log.Printf("%s - debug - startCrawlers fail: no node ailable\n", s.name)
@@ -175,69 +177,40 @@ func (s *dnsseeder) startCrawlers(resultsChan chan *result) {
 		return
 	}
 
-	// struct to hold config options for each status
-	var crawlers = []struct {
-		desc       string
-		status     uint32
-		maxCount   uint32 // max goroutines to start for this status type
-		totalCount uint32 // stats count of this type
-		started    uint32 // count of goroutines started for this type
-		delay      int64  // number of second since last try
-	}{
-		{"statusRG", statusRG, s.maxStart[statusRG], 0, 0, s.delay[statusRG]},
-		{"statusCG", statusCG, s.maxStart[statusCG], 0, 0, s.delay[statusCG]},
-		{"statusWG", statusWG, s.maxStart[statusWG], 0, 0, s.delay[statusWG]},
-		{"statusNG", statusNG, s.maxStart[statusNG], 0, 0, s.delay[statusNG]},
-	}
+	started := make([]uint32, maxStatusTypes)
+	totals := make([]uint32, maxStatusTypes)
 
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
+	// range on a map will not return items in the same order each time
+	// so this is a random'ish selection
+	for _, nd := range s.theList {
 
-	// step through each of the status types RG, CG, WG, NG
-	for _, c := range crawlers {
+		totals[nd.status]++
 
-		// range on a map will not return items in the same order each time
-		// so this is a random'ish selection
-		for _, nd := range s.theList {
-
-			if nd.status != c.status {
-				continue
-			}
-
-			// stats count
-			c.totalCount++
-
-			if nd.crawlActive == true {
-				continue
-			}
-
-			if c.started >= c.maxCount {
-				continue
-			}
-
-			if (time.Now().Unix() - c.delay) <= nd.lastTry.Unix() {
-				continue
-			}
-
-			nd.crawlActive = true
-			nd.crawlStart = time.Now()
-			// all looks good so start a go routine to crawl the remote node
-			go crawlNode(resultsChan, s, nd)
-			c.started++
+		if nd.crawlActive == true {
+			continue
 		}
 
-		if config.stats {
-			log.Printf("%s: started crawler: %s total: %v started: %v\n", s.name, c.desc, c.totalCount, c.started)
+		// capture the node status
+		ns := nd.status
+
+		// do we already have enough started at this status
+		if started[ns] >= s.maxStart[ns] {
+			continue
 		}
 
-		// update the global stats in another goroutine to free the main goroutine
-		// for other work
-		go updateNodeCounts(s, c.status, c.totalCount, c.started)
+		// don't crawl a node to quickly
+		if (time.Now().Unix() - s.delay[ns]) <= nd.lastTry.Unix() {
+			continue
+		}
+
+		// all looks good so start a go routine to crawl the remote node
+		go crawlNode(resultsChan, s, nd)
+		started[ns]++
 	}
 
-	if config.stats {
-		log.Printf("%s: crawlers started. total clients: %d\n", s.name, tcount)
-	}
+	// update the global stats in another goroutine to free the main goroutine
+	// for other work
+	go updateNodeCounts(s, tcount, started, totals)
 
 	// returns and read lock released
 }

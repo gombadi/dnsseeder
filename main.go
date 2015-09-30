@@ -144,12 +144,39 @@ func main() {
 
 // updateNodeCounts runs in a goroutine and updates the global stats with the latest
 // counts from a startCrawlers run
-func updateNodeCounts(s *dnsseeder, status, total, started uint32) {
-	// update the stats counters
+func updateNodeCounts(s *dnsseeder, tcount uint32, started, totals []uint32) {
 	s.counts.mtx.Lock()
-	s.counts.NdStatus[status] = total
-	s.counts.NdStarts[status] = started
+
+	for st := range []int{statusRG, statusCG, statusWG, statusNG} {
+		if config.stats {
+			log.Printf("%s: started crawler: %s total: %v started: %v\n", s.name, status2str(uint32(st)), totals[st], started[st])
+		}
+
+		// update the stats counters
+		s.counts.NdStatus[st] = totals[st]
+		s.counts.NdStarts[st] = started[st]
+	}
+
+	if config.stats {
+		log.Printf("%s: crawlers started. total nodes: %d\n", s.name, tcount)
+	}
 	s.counts.mtx.Unlock()
+}
+
+// status2str will return the string description of the status
+func status2str(status uint32) string {
+	switch status {
+	case statusRG:
+		return "statusRG"
+	case statusCG:
+		return "statusCG"
+	case statusWG:
+		return "statusWG"
+	case statusNG:
+		return "statusNG"
+	default:
+		return "Unknown"
+	}
 }
 
 // updateDNSCounts runs in a goroutine and updates the global stats for the number of DNS requests

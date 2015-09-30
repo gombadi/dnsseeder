@@ -27,22 +27,6 @@ type node struct {
 	crawlActive  bool             // are we currently crawling this client
 }
 
-// status2str will return the string description of the status
-func (nd node) status2str() string {
-	switch nd.status {
-	case statusRG:
-		return "statusRG"
-	case statusCG:
-		return "statusCG"
-	case statusWG:
-		return "statusWG"
-	case statusNG:
-		return "statusNG"
-	default:
-		return "Unknown"
-	}
-}
-
 // dns2str will return the string description of the dns type
 func (nd node) dns2str() string {
 	switch nd.dnsType {
