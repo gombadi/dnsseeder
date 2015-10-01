@@ -65,17 +65,17 @@ type dnsseeder struct {
 }
 
 type result struct {
-	nas     []*wire.NetAddress // slice of node addresses returned from a node
-	msg     *crawlError        // error string or nil if no problems
-	node    string             // theList key to the node that was crawled
-	success bool               // was the crawl successful
+	nas  []*wire.NetAddress // slice of node addresses returned from a node
+	msg  *crawlError        // error string or nil if no problems
+	node string             // theList key to the node that was crawled
 }
 
 // initCrawlers needs to be run before the startCrawlers so it can get
 // a list of current ip addresses from the other seeders and therefore
 // start the crawl process
-func (s *dnsseeder) initCrawlers() {
+func (s *dnsseeder) initSeeder() {
 
+	// range over existing seeders for the network and get starting ip addresses from them
 	for _, aseeder := range s.seeders {
 		c := 0
 
@@ -129,7 +129,7 @@ func (s *dnsseeder) runSeeder(done <-chan struct{}, wg *sync.WaitGroup) {
 	resultsChan := make(chan *result)
 
 	// load data from other seeders so we can start crawling nodes
-	s.initCrawlers()
+	s.initSeeder()
 
 	// start initial scan now so we don't have to wait for the timers to fire
 	s.startCrawlers(resultsChan)
@@ -159,7 +159,7 @@ func (s *dnsseeder) runSeeder(done <-chan struct{}, wg *sync.WaitGroup) {
 			dowhile = false
 		}
 	}
-	fmt.Printf(".")
+	fmt.Printf("shutting down seeder: %s\n", s.name)
 	// end the goroutine & defer will call wg.Done()
 }
 
@@ -191,22 +191,22 @@ func (s *dnsseeder) startCrawlers(resultsChan chan *result) {
 			continue
 		}
 
-		// capture the node status
-		ns := nd.status
-
 		// do we already have enough started at this status
-		if started[ns] >= s.maxStart[ns] {
+		if started[nd.status] >= s.maxStart[nd.status] {
 			continue
 		}
 
 		// don't crawl a node to quickly
-		if (time.Now().Unix() - s.delay[ns]) <= nd.lastTry.Unix() {
+		if (time.Now().Unix() - s.delay[nd.status]) <= nd.lastTry.Unix() {
 			continue
 		}
 
 		// all looks good so start a go routine to crawl the remote node
+		nd.crawlActive = true
+		nd.crawlStart = time.Now()
+
 		go crawlNode(resultsChan, s, nd)
-		started[ns]++
+		started[nd.status]++
 	}
 
 	// update the global stats in another goroutine to free the main goroutine
@@ -221,6 +221,9 @@ func (s *dnsseeder) processResult(r *result) {
 
 	var nd *node
 
+	s.mtx.Lock()
+	defer s.mtx.Unlock()
+
 	if _, ok := s.theList[r.node]; ok {
 		nd = s.theList[r.node]
 	} else {
@@ -228,9 +231,10 @@ func (s *dnsseeder) processResult(r *result) {
 		return
 	}
 
+	// now nd has been set to a valid pointer we can use it in a defer
 	defer crawlEnd(nd)
 
-	//if r.success != true {
+	// msg is a crawlerror or nil
 	if r.msg != nil {
 		// update the fact that we have not connected to this node
 		nd.lastTry = time.Now()
@@ -241,7 +245,7 @@ func (s *dnsseeder) processResult(r *result) {
 		switch nd.status {
 		case statusRG:
 			// if we are full then any RG failures will skip directly to NG
-			if s.isFull() {
+			if len(s.theList) > s.maxSize {
 				nd.status = statusNG // not able to connect to this node so ignore
 				nd.statusTime = time.Now()
 			} else {
@@ -293,7 +297,7 @@ func (s *dnsseeder) processResult(r *result) {
 	oneThird := int(float64(s.maxSize / 3))
 
 	// if we are full then skip adding more possible clients
-	if s.isFull() == false {
+	if len(s.theList) < s.maxSize {
 		// loop through all the received network addresses and add to thelist if not present
 		for _, na := range r.nas {
 			// a new network address so add to the system
@@ -321,33 +325,22 @@ func (s *dnsseeder) processResult(r *result) {
 
 }
 
+// crawlEnd is run as a defer to make sure node status is correctly updated
 func crawlEnd(nd *node) {
 	nd.crawlActive = false
-}
-
-// isDup will return true or false depending if the ip exists in theList
-func (s *dnsseeder) isDup(ipport string) bool {
-	s.mtx.RLock()
-	_, dup := s.theList[ipport]
-	s.mtx.RUnlock()
-	return dup
-}
-
-// isNaDup returns true if this wire.NetAddress is already known to us
-func (s *dnsseeder) isNaDup(na *wire.NetAddress) bool {
-	return s.isDup(net.JoinHostPort(na.IP.String(), strconv.Itoa(int(na.Port))))
 }
 
 // addNa validates and adds a network address to theList
 func (s *dnsseeder) addNa(nNa *wire.NetAddress) bool {
 
-	// as this is run in many different goroutines then they may all try and
-	// add new addresses so do a final check
-	if s.isFull() {
+	if len(s.theList) > s.maxSize {
 		return false
 	}
 
-	if dup := s.isNaDup(nNa); dup == true {
+	// generate the key and add to theList
+	k := net.JoinHostPort(nNa.IP.String(), strconv.Itoa(int(nNa.Port)))
+
+	if _, dup := s.theList[k]; dup == true {
 		return false
 	}
 	if nNa.Port <= minPort || nNa.Port >= maxPort {
@@ -394,14 +387,8 @@ func (s *dnsseeder) addNa(nNa *wire.NetAddress) bool {
 		}
 	}
 
-	// generate the key and add to theList
-	k := net.JoinHostPort(nNa.IP.String(), strconv.Itoa(int(nNa.Port)))
-	s.mtx.Lock()
-	// final check to make sure another crawl & goroutine has not already added this client
-	if _, dup := s.theList[k]; dup == false {
-		s.theList[k] = &nt
-	}
-	s.mtx.Unlock()
+	// add the new node details to theList
+	s.theList[k] = &nt
 
 	return true
 }
@@ -445,7 +432,7 @@ func (s *dnsseeder) auditNodes() {
 
 	// set this early so for this audit run all NG clients will be purged
 	// and space will be made for new, possible CG clients
-	iAmFull := s.isFull()
+	iAmFull := len(s.theList) > s.maxSize
 
 	// cgGoal is 75% of the max statusCG clients we can crawl with the current network delay & maxStart settings.
 	// This allows us to cycle statusCG users to keep the list fresh
@@ -511,9 +498,7 @@ func (s *dnsseeder) auditNodes() {
 				s.theList[k] = nil
 				delete(s.theList, k)
 			}
-
 		}
-
 	}
 	if config.verbose {
 		log.Printf("%s: Audit complete. %v nodes purged\n", s.name, c)
@@ -524,17 +509,6 @@ func (s *dnsseeder) auditNodes() {
 // teatload loads the dns records with time based test data
 func (s *dnsseeder) loadDNS() {
 	updateDNS(s)
-}
-
-// isFull returns true if the number of remote clients is more than we want to store
-func (s *dnsseeder) isFull() bool {
-	s.mtx.RLock()
-	defer s.mtx.RUnlock()
-
-	if len(s.theList) > s.maxSize {
-		return true
-	}
-	return false
 }
 
 // getSeederByName returns a pointer to the seeder based on its name or nil if not found

@@ -33,10 +33,6 @@ func crawlNode(rc chan *result, s *dnsseeder, nd *node) {
 		node: net.JoinHostPort(nd.na.IP.String(), strconv.Itoa(int(nd.na.Port))),
 	}
 
-	if e != nil {
-		res.success = true
-	}
-
 	// all done so push the result back to the seeder.
 	//This will block until the seeder reads the result
 	rc <- res
@@ -142,7 +138,7 @@ func crawlIP(s *dnsseeder, nd *node) ([]*wire.NetAddress, *crawlError) {
 
 	// if we get this far and if the seeder is full then don't ask for addresses. This will reduce bandwith usage while still
 	// confirming that we can connect to the remote node
-	if s.isFull() {
+	if len(s.theList) > s.maxSize {
 		return nil, nil
 	}
 	// send getaddr command
