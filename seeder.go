@@ -288,6 +288,11 @@ func (s *dnsseeder) processResult(r *result) {
 	nd.lastConnect = time.Now()
 	nd.lastTry = nd.lastConnect
 	nd.statusStr = "ok: received remote address list"
+	// update the node from the results
+	nd.version = r.version
+	nd.services = r.services
+	nd.lastBlock = r.lastBlock
+	nd.strVersion = r.strVersion
 
 	added := 0
 
