@@ -13,7 +13,6 @@ type node struct {
 	lastConnect  time.Time        // last time we sucessfully connected to this client
 	lastTry      time.Time        // last time we tried to connect to this client
 	crawlStart   time.Time        // time when we started the last crawl
-	statusTime   time.Time        // time the status was last updated
 	nonstdIP     net.IP           // if not using the default port then this is the encoded ip containing the actual port
 	statusStr    string           // string with last error or OK details
 	strVersion   string           // remote client user agent

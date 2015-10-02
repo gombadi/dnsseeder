@@ -24,14 +24,12 @@ func (e *crawlError) Error() string {
 // list of currently active addresses
 func crawlNode(rc chan *result, s *dnsseeder, nd *node) {
 
-	// connect to the remote ip and ask them for their addr list
-	rna, e := crawlIP(s, nd)
-
 	res := &result{
-		nas:  rna,
-		msg:  e,
 		node: net.JoinHostPort(nd.na.IP.String(), strconv.Itoa(int(nd.na.Port))),
 	}
+
+	// connect to the remote ip and ask them for their addr list
+	res.nas, res.msg = crawlIP(s, res)
 
 	// all done so push the result back to the seeder.
 	//This will block until the seeder reads the result
@@ -41,34 +39,19 @@ func crawlNode(rc chan *result, s *dnsseeder, nd *node) {
 }
 
 // crawlIP retrievs a slice of ip addresses from a client
-func crawlIP(s *dnsseeder, nd *node) ([]*wire.NetAddress, *crawlError) {
+func crawlIP(s *dnsseeder, r *result) ([]*wire.NetAddress, *crawlError) {
 
-	ip := nd.na.IP.String()
-	port := strconv.Itoa(int(nd.na.Port))
-
-	// get correct formatting for ipv6 addresses
-	dialString := net.JoinHostPort(ip, port)
-
-	if config.debug {
-		log.Printf("%s - debug - start crawl: node %s status: %v:%v lastcrawl: %s\n",
-			s.name,
-			dialString,
-			nd.status,
-			nd.rating,
-			time.Since(nd.crawlStart).String())
-	}
-
-	conn, err := net.DialTimeout("tcp", dialString, time.Second*10)
+	conn, err := net.DialTimeout("tcp", r.node, time.Second*10)
 	if err != nil {
 		if config.debug {
-			log.Printf("%s - debug - Could not connect to %s - %v\n", s.name, ip, err)
+			log.Printf("%s - debug - Could not connect to %s - %v\n", s.name, r.node, err)
 		}
 		return nil, &crawlError{"", err}
 	}
 
 	defer conn.Close()
 	if config.debug {
-		log.Printf("%s - debug - Connected to remote address: %s Last connect was %v ago\n", s.name, ip, time.Since(nd.lastConnect).String())
+		log.Printf("%s - debug - Connected to remote address: %s\n", s.name, r.node)
 	}
 
 	// set a deadline for all comms to be done by. After this all i/o will error
@@ -98,17 +81,13 @@ func crawlIP(s *dnsseeder, nd *node) ([]*wire.NetAddress, *crawlError) {
 	case *wire.MsgVersion:
 		// The message is a pointer to a MsgVersion struct.
 		if config.debug {
-			log.Printf("%s - debug - %s - Remote version: %v\n", s.name, ip, msg.ProtocolVersion)
+			log.Printf("%s - debug - %s - Remote version: %v\n", s.name, r.node, msg.ProtocolVersion)
 		}
 		// fill the node struct with the remote details
-		nd.version = msg.ProtocolVersion
-		nd.services = msg.Services
-		nd.lastBlock = msg.LastBlock
-		if nd.strVersion != msg.UserAgent {
-			// if the srtVersion is already the same then don't overwrite it.
-			// saves the GC having to cleanup a perfectly good string
-			nd.strVersion = msg.UserAgent
-		}
+		r.version = msg.ProtocolVersion
+		r.services = msg.Services
+		r.lastBlock = msg.LastBlock
+		r.strVersion = msg.UserAgent
 	default:
 		return nil, &crawlError{"Did not receive expected Version message from remote client", errors.New("")}
 	}
@@ -130,7 +109,7 @@ func crawlIP(s *dnsseeder, nd *node) ([]*wire.NetAddress, *crawlError) {
 	switch msg.(type) {
 	case *wire.MsgVerAck:
 		if config.debug {
-			log.Printf("%s - debug - %s - received Version Ack\n", s.name, ip)
+			log.Printf("%s - debug - %s - received Version Ack\n", s.name, r.node)
 		}
 	default:
 		return nil, &crawlError{"Did not receive expected Ver Ack message from remote client", errors.New("")}
@@ -162,13 +141,13 @@ func crawlIP(s *dnsseeder, nd *node) ([]*wire.NetAddress, *crawlError) {
 			case *wire.MsgAddr:
 				// received the addr message so return the result
 				if config.debug {
-					log.Printf("%s - debug - %s - received valid addr message\n", s.name, ip)
+					log.Printf("%s - debug - %s - received valid addr message\n", s.name, r.node)
 				}
 				dowhile = false
 				return msg.AddrList, nil
 			default:
 				if config.debug {
-					log.Printf("%s - debug - %s - ignoring message - %v\n", s.name, ip, msg.Command())
+					log.Printf("%s - debug - %s - ignoring message - %v\n", s.name, r.node, msg.Command())
 				}
 			}
 		}

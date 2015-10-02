@@ -50,10 +50,6 @@ type dnsseeder struct {
 	id        wire.BitcoinNet  // Magic number - Unique ID for this network. Sent in header of all messages
 	theList   map[string]*node // the list of current nodes
 	mtx       sync.RWMutex     // protect thelist
-	maxSize   int              // max number of clients before we start restricting new entries
-	port      uint16           // default network port this seeder uses
-	pver      uint32           // minimum block height for the seeder
-	ttl       uint32           // DNS TTL to use for this seeder
 	dnsHost   string           // dns host we will serve results for this domain
 	name      string           // Short name for the network
 	desc      string           // Long description for the network
@@ -62,12 +58,20 @@ type dnsseeder struct {
 	maxStart  []uint32         // max number of goroutines to start each run for each status type
 	delay     []int64          // number of seconds to wait before we connect to a known client for each status
 	counts    NodeCounts       // structure to hold stats for this seeder
+	pver      uint32           // minimum block height for the seeder
+	ttl       uint32           // DNS TTL to use for this seeder
+	maxSize   int              // max number of clients before we start restricting new entries
+	port      uint16           // default network port this seeder uses
 }
 
 type result struct {
-	nas  []*wire.NetAddress // slice of node addresses returned from a node
-	msg  *crawlError        // error string or nil if no problems
-	node string             // theList key to the node that was crawled
+	nas        []*wire.NetAddress // slice of node addresses returned from a node
+	msg        *crawlError        // error string or nil if no problems
+	node       string             // theList key to the node that was crawled
+	version    int32              // remote node protocol version
+	services   wire.ServiceFlag   // remote client supported services
+	lastBlock  int32              // last block seen by the node
+	strVersion string             // remote client user agent
 }
 
 // initCrawlers needs to be run before the startCrawlers so it can get
@@ -173,7 +177,7 @@ func (s *dnsseeder) startCrawlers(resultsChan chan *result) {
 	tcount := uint32(len(s.theList))
 	if tcount == 0 {
 		if config.debug {
-			log.Printf("%s - debug - startCrawlers fail: no node ailable\n", s.name)
+			log.Printf("%s - debug - startCrawlers fail: no node available\n", s.name)
 		}
 		return
 	}
@@ -247,22 +251,18 @@ func (s *dnsseeder) processResult(r *result) {
 			// if we are full then any RG failures will skip directly to NG
 			if len(s.theList) > s.maxSize {
 				nd.status = statusNG // not able to connect to this node so ignore
-				nd.statusTime = time.Now()
 			} else {
 				if nd.rating += 25; nd.rating > 30 {
 					nd.status = statusWG
-					nd.statusTime = time.Now()
 				}
 			}
 		case statusCG:
 			if nd.rating += 25; nd.rating >= 50 {
 				nd.status = statusWG
-				nd.statusTime = time.Now()
 			}
 		case statusWG:
 			if nd.rating += 15; nd.rating >= 100 {
 				nd.status = statusNG // not able to connect to this node so ignore
-				nd.statusTime = time.Now()
 			}
 		}
 		// no more to do so return which will shutdown the goroutine & call
@@ -281,23 +281,21 @@ func (s *dnsseeder) processResult(r *result) {
 	}
 
 	// succesful connection and addresses received so mark status
-	if nd.status != statusCG {
-		nd.status = statusCG
-		nd.statusTime = time.Now()
-	}
+	nd.status = statusCG
 	cs := nd.lastConnect
 	nd.rating = 0
 	nd.connectFails = 0
 	nd.lastConnect = time.Now()
-	nd.lastTry = time.Now()
+	nd.lastTry = nd.lastConnect
 	nd.statusStr = "ok: received remote address list"
 
 	added := 0
-	// do not accept more than one third of maxSize addresses from one node
-	oneThird := int(float64(s.maxSize / 3))
 
 	// if we are full then skip adding more possible clients
 	if len(s.theList) < s.maxSize {
+		// do not accept more than one third of maxSize addresses from one node
+		oneThird := int(float64(s.maxSize / 3))
+
 		// loop through all the received network addresses and add to thelist if not present
 		for _, na := range r.nas {
 			// a new network address so add to the system
@@ -322,7 +320,6 @@ func (s *dnsseeder) processResult(r *result) {
 			time.Since(nd.crawlStart).String(),
 			time.Since(cs).String())
 	}
-
 }
 
 // crawlEnd is run as a defer to make sure node status is correctly updated
@@ -358,7 +355,6 @@ func (s *dnsseeder) addNa(nNa *wire.NetAddress) bool {
 		lastConnect: time.Now(),
 		version:     0,
 		status:      statusRG,
-		statusTime:  time.Now(),
 		dnsType:     dnsV4Std,
 	}
 
