@@ -57,12 +57,10 @@ func crawlIP(s *dnsseeder, r *result) ([]*wire.NetAddress, *crawlError) {
 	// set a deadline for all comms to be done by. After this all i/o will error
 	conn.SetDeadline(time.Now().Add(time.Second * maxTo))
 
-	// First command to remote end needs to be a version command
-	// last parameter is lastblock
-	msgver, err := wire.NewMsgVersionFromConn(conn, nounce, 0)
-	if err != nil {
-		return nil, &crawlError{"Create NewMsgVersionFromConn", err}
-	}
+	meAddr, youAddr := conn.LocalAddr(), conn.RemoteAddr()
+	me := wire.NewNetAddress(meAddr.(*net.TCPAddr), wire.SFNodeNetwork)
+	you := wire.NewNetAddress(youAddr.(*net.TCPAddr), wire.SFNodeNetwork)
+	msgver := wire.NewMsgVersion(me, you, nounce, 0)
 
 	err = wire.WriteMessage(conn, msgver, s.pver, s.id)
 	if err != nil {
