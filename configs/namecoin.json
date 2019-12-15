@@ -1,0 +1,11 @@
+{
+ "Name": "NamecoinNet",
+ "Desc": "Namecoin Main Net",
+ "Id": "0xfeb4bef9",
+ "Port": 8334,
+ "Pver": 70001,
+ "DNSName": "dnsseed.nmctest.net",
+ "TTL": 600,
+ "Seeder1": "nmc.seed.quisquis.de",
+ "Seeder2": "seed.nmc.markasoftware.com"
+}
