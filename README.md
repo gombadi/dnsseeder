@@ -91,7 +91,9 @@ ${HOME}/go/bin/dnsseeder -p <dns.port.to.listen.on> -v -w 8880 -netfile ${1} 2>&
 
 ## RUNNING AS NON-ROOT
 
-Typically, you'll need root privileges to listen to port 53 (name service).
+Typically, you'll need root privileges to listen to port 53 (name service).  Some potential solutions:
+
+### iptables
 
 One solution is using an iptables rule (Linux only) to redirect it to
 a non-privileged port:
@@ -101,6 +103,11 @@ $ iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-port 5353
 If properly configured, this will allow you to run dnsseeder in userspace, using
 the -p 5353 option.
 
+### setcap
+
+On Linux, another solution is running the following command to authorize dnsseeder to bind to privileged ports.
+
+$ sudo setcap 'cap_net_bind_service=+ep' ${HOME}/go/bin/dnsseeder
 
 ## License
 
