@@ -41,7 +41,7 @@ func crawlNode(rc chan *result, s *dnsseeder, nd *node) {
 // crawlIP retrievs a slice of ip addresses from a client
 func crawlIP(s *dnsseeder, r *result) ([]*wire.NetAddress, *crawlError) {
 
-	conn, err := net.DialTimeout("tcp", r.node, time.Second*10)
+	conn, err := config.dial("tcp", r.node, time.Second*10)
 	if err != nil {
 		if config.debug {
 			log.Printf("%s - debug - Could not connect to %s - %v\n", s.name, r.node, err)
@@ -58,8 +58,20 @@ func crawlIP(s *dnsseeder, r *result) ([]*wire.NetAddress, *crawlError) {
 	conn.SetDeadline(time.Now().Add(time.Second * maxTo))
 
 	meAddr, youAddr := conn.LocalAddr(), conn.RemoteAddr()
-	me := wire.NewNetAddress(meAddr.(*net.TCPAddr), wire.SFNodeNetwork)
-	you := wire.NewNetAddress(youAddr.(*net.TCPAddr), wire.SFNodeNetwork)
+	me, err := newNetAddress(meAddr, wire.SFNodeNetwork)
+	if err != nil {
+		if config.debug {
+			log.Printf("%s - debug - Could not create new local net address from node %s - %v\n", s.name, r.node, err)
+		}
+		return nil, &crawlError{"", err}
+	}
+	you, err := newNetAddress(youAddr, wire.SFNodeNetwork)
+	if err != nil {
+		if config.debug {
+			log.Printf("%s - debug - Could not create new remote net address from node %s - %v\n", s.name, r.node, err)
+		}
+		return nil, &crawlError{"", err}
+	}
 	msgver := wire.NewMsgVersion(me, you, nounce, 0)
 
 	err = wire.WriteMessage(conn, msgver, s.pver, s.id)
