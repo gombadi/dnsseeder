@@ -128,6 +128,7 @@ func crawlIP(s *dnsseeder, r *result) ([]*wire.NetAddress, *crawlError) {
 
 	c := 0
 	dowhile := true
+	peers := []*wire.NetAddress{}
 	for dowhile == true {
 
 		// Using the Bitcoin lib for the some networks means it does not understand some
@@ -141,8 +142,19 @@ func crawlIP(s *dnsseeder, r *result) ([]*wire.NetAddress, *crawlError) {
 				if config.debug {
 					log.Printf("%s - debug - %s - received valid addr message\n", s.name, r.node)
 				}
-				dowhile = false
-				return msg.AddrList, nil
+
+				peers = append(peers, msg.AddrList...)
+
+				// Bitcoin nodes typically return two Addr messages: one with
+				// only one peer, and another with many peers.  This is
+				// probably because ancient protocol versions (pver < 209) only
+				// allowed one peer per Addr mesage, so returning a one-peer
+				// Addr message first improves backward-compatibility.  Anyway,
+				// this means we need to wait for the second Addr message.
+				if len(peers) > 1 {
+					dowhile = false
+					return msg.AddrList, nil
+				}
 			default:
 				if config.debug {
 					log.Printf("%s - debug - %s - ignoring message - %v\n", s.name, r.node, msg.Command())
