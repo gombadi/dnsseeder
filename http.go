@@ -20,6 +20,7 @@ func startHTTP(port string) {
 	http.HandleFunc("/statusWG", statusWGHandler)
 	http.HandleFunc("/statusNG", statusNGHandler)
 	http.HandleFunc("/summary", summaryHandler)
+	http.HandleFunc("/seeds.txt", txtHandler)
 	http.HandleFunc("/", emptyHandler)
 	// listen only on localhost
 	err := http.ListenAndServe("127.0.0.1:"+port, nil)
@@ -477,6 +478,7 @@ func summaryHandler(w http.ResponseWriter, r *http.Request) {
     <td><a href="/statusWG?s={{.Name}}">WG: {{.WG}}/{{.WGS}}</a></td>
     <td><a href="/statusNG?s={{.Name}}">NG: {{.NG}}/{{.NGS}}</a></td>
     <td>Total: {{.Total}}</td>
+    <td><a title="Export in format consumed by Bitcoin Core contrib/seeds" href="/seeds.txt?s={{.Name}}">seeds.txt</a></td>
     </tr></table>
     </td><td>
     DNS Requests<br>
@@ -502,6 +504,52 @@ func summaryHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeFooter(w, r, st)
+}
+
+// txtHandler outputs the node list in the format expected by Bitcoin Core's
+// contrib/seeds script.
+func txtHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain")
+
+	// read the seeder name
+	n := r.FormValue("s")
+	s := getSeederByName(n)
+	if s == nil {
+		fmt.Fprintf(w, "No seeder found called %s\n", n)
+		return
+	}
+
+	fmt.Fprintf(w, "# address                                        good  lastSuccess    %%(2h)   %%(8h)   %%(1d)   %%(7d)  %%(30d)  blocks      svcs  version\n")
+
+	// gather all the info before writing anything to the remote browser
+	s.mtx.RLock()
+	defer s.mtx.RUnlock()
+
+	for k, v := range s.theList {
+		address := k
+
+		var good int
+		if v.status == statusCG {
+			good = 1
+		} else {
+			good = 0
+		}
+
+		lastSuccess := v.lastConnect
+
+		// Alas we don't actually measure this, so fake it.
+		uptime := (100.0 - float32(v.rating)) / 2.0 + 50.0
+
+		blocks := v.lastBlock
+
+		services := v.services
+
+		version := v.version
+
+		userAgent := v.strVersion
+
+		fmt.Fprintf(w, "%s                                  %d   %d  %.2f%% %.2f%% %.2f%% %.2f%% %.2f%%  %d  %08x  %d %q\n", address, good, lastSuccess.Unix(), uptime, uptime, uptime, uptime, uptime, blocks, int32(services), version, userAgent)
+	}
 }
 
 // writeHeader will output the standard header
