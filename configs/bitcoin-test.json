@@ -6,6 +6,7 @@
  "Pver": 70001,
  "DNSName": "btctseed.zagbot.com",
  "TTL": 300,
+ "InitialIP": "0.0.0.0,0.0.0.0",
  "Seeder1": "testnet-seed.alexykot.me",
  "Seeder2": "testnet-seed.bitcoin.petertodd.org",
  "Seeder3": "testnet-seed.bluematt.me"

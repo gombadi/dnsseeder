@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -105,12 +106,14 @@ func (s *dnsseeder) initSeeder() {
 		}
 	}
 
-	// load one ip address into system and start crawling from it
+	// load ip addresses into system and start crawling from them
 	if len(s.theList) == 0 && s.initialIP != "" {
-		if newIP := net.ParseIP(s.initialIP); newIP != nil {
-			// 1 at the end is the services flag
-			if x := s.addNa(wire.NewNetAddressIPPort(newIP, s.port, 1)); x == true {
-				log.Printf("%s: crawling with initial IP %s \n", s.name, s.initialIP)
+		for _, initialIP := range strings.Split(s.initialIP, ",") {
+			if newIP := net.ParseIP(initialIP); newIP != nil {
+				// 1 at the end is the services flag
+				if x := s.addNa(wire.NewNetAddressIPPort(newIP, s.port, 1)); x == true {
+					log.Printf("%s: crawling with initial IP %s \n", s.name, s.initialIP)
+				}
 			}
 		}
 	}
