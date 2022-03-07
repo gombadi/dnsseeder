@@ -6,7 +6,7 @@
  "Pver": 60000,
  "DNSName": "dnsseed.zagbot.com",
  "TTL": 600,
- "InitialIP": "0.0.0.0,0.0.0.0",
+ "InitialIPs": ["0.0.0.0","0.0.0.0"],
  "Seeders": [
   "seed2.twister.net.co",
   "seed.twister.net.co",

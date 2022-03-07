@@ -11,15 +11,15 @@ import (
 
 // JNetwork is the exported struct that is read from the network file
 type JNetwork struct {
-	Name      string
-	Desc      string
-	ID        string
-	Port      uint16
-	Pver      uint32
-	DNSName   string
-	TTL       uint32
-	InitialIP string
-	Seeders   []string
+	Name       string
+	Desc       string
+	ID         string
+	Port       uint16
+	Pver       uint32
+	DNSName    string
+	TTL        uint32
+	InitialIPs []string
+	Seeders    []string
 }
 
 func createNetFile() {
@@ -27,15 +27,18 @@ func createNetFile() {
 
 	// create a struct to encode with json
 	jnw := &JNetwork{
-		ID:        "0xabcdef01",
-		Port:      1234,
-		Pver:      70001,
-		TTL:       600,
-		DNSName:   "seeder.example.com",
-		Name:      "SeederNet",
-		Desc:      "Description of SeederNet",
-		InitialIP: "",
-		Seeders:   []string{
+		ID:         "0xabcdef01",
+		Port:       1234,
+		Pver:       70001,
+		TTL:        600,
+		DNSName:    "seeder.example.com",
+		Name:       "SeederNet",
+		Desc:       "Description of SeederNet",
+		InitialIPs: []string{
+			"0.0.0.0",
+			"0.0.0.0",
+		},
+		Seeders:    []string{
 			"seeder1.example.com",
 			"seed1.bob.com",
 			"seed2.example.com",
@@ -104,7 +107,7 @@ func initNetwork(jnw JNetwork) (*dnsseeder, error) {
 	}
 	seeder.id = wire.BitcoinNet(t1)
 
-	seeder.initialIP = jnw.InitialIP
+	seeder.initialIPs = jnw.InitialIPs
 
 	// load the seeder dns
 	seeder.seeders = jnw.Seeders

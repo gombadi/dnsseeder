@@ -5,7 +5,6 @@ import (
 	"log"
 	"net"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -48,21 +47,21 @@ const (
 )
 
 type dnsseeder struct {
-	id        wire.BitcoinNet  // Magic number - Unique ID for this network. Sent in header of all messages
-	theList   map[string]*node // the list of current nodes
-	mtx       sync.RWMutex     // protect thelist
-	dnsHost   string           // dns host we will serve results for this domain
-	name      string           // Short name for the network
-	desc      string           // Long description for the network
-	initialIP string           // Initial ip address to connect to and ask for addresses if we have no seeders
-	seeders   []string         // slice of seeders to pull ip addresses when starting this seeder
-	maxStart  []uint32         // max number of goroutines to start each run for each status type
-	delay     []int64          // number of seconds to wait before we connect to a known client for each status
-	counts    NodeCounts       // structure to hold stats for this seeder
-	pver      uint32           // minimum block height for the seeder
-	ttl       uint32           // DNS TTL to use for this seeder
-	maxSize   int              // max number of clients before we start restricting new entries
-	port      uint16           // default network port this seeder uses
+	id         wire.BitcoinNet  // Magic number - Unique ID for this network. Sent in header of all messages
+	theList    map[string]*node // the list of current nodes
+	mtx        sync.RWMutex     // protect thelist
+	dnsHost    string           // dns host we will serve results for this domain
+	name       string           // Short name for the network
+	desc       string           // Long description for the network
+	initialIPs []string         // Initial ip addresses to connect to and ask for addresses if we have no seeders
+	seeders    []string         // slice of seeders to pull ip addresses when starting this seeder
+	maxStart   []uint32         // max number of goroutines to start each run for each status type
+	delay      []int64          // number of seconds to wait before we connect to a known client for each status
+	counts     NodeCounts       // structure to hold stats for this seeder
+	pver       uint32           // minimum block height for the seeder
+	ttl        uint32           // DNS TTL to use for this seeder
+	maxSize    int              // max number of clients before we start restricting new entries
+	port       uint16           // default network port this seeder uses
 }
 
 type result struct {
@@ -107,12 +106,12 @@ func (s *dnsseeder) initSeeder() {
 	}
 
 	// load ip addresses into system and start crawling from them
-	if len(s.theList) == 0 && s.initialIP != "" {
-		for _, initialIP := range strings.Split(s.initialIP, ",") {
+	if len(s.theList) == 0 && len(s.initialIPs) > 0 {
+		for _, initialIP := range s.initialIPs {
 			if newIP := net.ParseIP(initialIP); newIP != nil {
 				// 1 at the end is the services flag
 				if x := s.addNa(wire.NewNetAddressIPPort(newIP, s.port, 1)); x == true {
-					log.Printf("%s: crawling with initial IP %s \n", s.name, s.initialIP)
+					log.Printf("%s: crawling with initial IP %s \n", s.name, initialIP)
 				}
 			}
 		}
@@ -123,7 +122,9 @@ func (s *dnsseeder) initSeeder() {
 		for _, v := range s.seeders {
 			log.Printf("%s: Seeder: %s\n", s.name, v)
 		}
-		log.Printf("%s: Initial IP: %s\n", s.name, s.initialIP)
+		for _, v := range s.initialIPs {
+			log.Printf("%s: Initial IP: %s\n", s.name, v)
+		}
 	}
 }
 
