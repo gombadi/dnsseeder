@@ -7,7 +7,9 @@
  "DNSName": "dnsseed.zagbot.com",
  "TTL": 600,
  "InitialIP": "0.0.0.0,0.0.0.0",
- "Seeder1": "seed2.twister.net.co",
- "Seeder2": "seed.twister.net.co",
- "Seeder3": "seed3.twister.net.co"
+ "Seeders": [
+  "seed2.twister.net.co",
+  "seed.twister.net.co",
+  "seed3.twister.net.co"
+ ]
 }

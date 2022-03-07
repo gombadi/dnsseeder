@@ -7,6 +7,8 @@
  "DNSName": "dnsseed.nmctest.net",
  "TTL": 600,
  "InitialIP": "0.0.0.0,0.0.0.0",
- "Seeder1": "nmc.seed.quisquis.de",
- "Seeder2": "seed.nmc.markasoftware.com"
+ "Seeders": [
+  "nmc.seed.quisquis.de",
+  "seed.nmc.markasoftware.com"
+ ]
 }
