@@ -9,6 +9,9 @@
  "InitialIPs": ["0.0.0.0","0.0.0.0"],
  "Seeders": [
   "nmc.seed.quisquis.de",
-  "seed.nmc.markasoftware.com"
+  "seed.nmc.markasoftware.com",
+  "seed.namecoin.libreisp.se",
+  "dnsseed1.nmc.dotbit.zone",
+  "dnsseed2.nmc.dotbit.zone"
  ]
 }
