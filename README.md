@@ -29,9 +29,9 @@ Simply use go get to download the code:
     $ go get github.com/gombadi/dnsseeder
 
 Dependencies are handled by the Go vendor directory.
-Note: This means the codebase requires Go 1.5 or higher and use of GO15VENDOREXPERIMENT=1
+Note: This means the codebase requires Go 1.5 or higher and use of `GO15VENDOREXPERIMENT=1`
 
-There seem to be some issues with using go get so a process that works for me on Unix based systems is -
+There seem to be some issues with using `go get` so a process that works for me on Unix based systems is -
 
 ```
 cd ${HOME}
@@ -42,7 +42,7 @@ cd dnsseeder
 go install
 
 ```
-The binary will then be available in ${HOME}/go/bin
+The binary will then be available in `${HOME}/go/bin`
 
 
 ## Usage
@@ -51,7 +51,7 @@ The binary will then be available in ${HOME}/go/bin
 
 An easy way to run the program is with tmux or screen. This enables you to log out and leave the program running.
 
-If you want to be able to view the web interface then add -w port for the web server to listen on. If this is not provided then no web interface will be available. With the web site running you can then access the site by http://localhost:port/summary
+If you want to be able to view the web interface then add `-w port` for the web server to listen on. If this is not provided then no web interface will be available. With the web site running you can then access the site by http://localhost:port/summary
 
 **NOTE -** For security reasons the web server will only listen on localhost so you will need to either use an ssh tunnel or proxy requests via a web server like Nginx or Apache.
 
@@ -98,17 +98,21 @@ Typically, you'll need root privileges to listen to port 53 (name service).  Som
 One solution is using an iptables rule (Linux only) to redirect it to
 a non-privileged port:
 
+```
 $ sudo iptables -t nat -A PREROUTING -p udp --dport 53 -j REDIRECT --to-port 5353
 $ sudo iptables -t nat -A PREROUTING -p tcp --dport 53 -j REDIRECT --to-port 5353
+```
 
 If properly configured, this will allow you to run dnsseeder in userspace, using
-the -p 5353 option.
+the `-p 5353` option.
 
 ### setcap
 
 On Linux, another solution is running the following command to authorize dnsseeder to bind to privileged ports.
 
+```
 $ sudo setcap 'cap_net_bind_service=+ep' ${HOME}/go/bin/dnsseeder
+```
 
 ## License
 
