@@ -115,7 +115,8 @@ func main() {
 	// start dns server
 	dns.HandleFunc(".", handleDNS)
 	go serve("udp", config.port)
-	//go serve("tcp", config.port)
+	// RFC 7766 Sec. 5: "Authoritative server implementations MUST support TCP"
+	go serve("tcp", config.port)
 
 	var wg sync.WaitGroup
 
