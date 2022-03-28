@@ -8,8 +8,15 @@
  "TTL": 600,
  "InitialIPs": ["0.0.0.0","0.0.0.0"],
  "Seeders": [
+  "seed.bitcoin.sipa.be",
   "dnsseed.bluematt.me",
   "bitseed.xf2.org",
-  "dnsseed.bitcoin.dashjr.org"
+  "dnsseed.bitcoin.dashjr.org",
+  "seed.bitcoinstats.com",
+  "seed.bitcoin.jonasschnelli.ch",
+  "seed.btc.petertodd.org",
+  "seed.bitcoin.sprovoost.nl",
+  "dnsseed.emzy.de",
+  "seed.bitcoin.wiz.biz"
  ]
 }
