@@ -9,7 +9,10 @@
  "InitialIPs": ["0.0.0.0","0.0.0.0"],
  "Seeders": [
   "testnet-seed.alexykot.me",
+  "testnet-seed.bitcoin.jonasschnelli.ch",
   "testnet-seed.bitcoin.petertodd.org",
+  "seed.tbtc.petertodd.org",
+  "seed.testnet.bitcoin.sprovoost.nl",
   "testnet-seed.bluematt.me"
  ]
 }
