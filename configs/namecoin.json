@@ -6,7 +6,13 @@
  "Pver": 70001,
  "DNSName": "dnsseed.nmctest.net",
  "TTL": 600,
- "InitialIP": "0.0.0.0,0.0.0.0",
- "Seeder1": "nmc.seed.quisquis.de",
- "Seeder2": "seed.nmc.markasoftware.com"
+ "InitialIPs": ["0.0.0.0","0.0.0.0"],
+ "Seeders": [
+  "nmc.seed.quisquis.de",
+  "seed.nmc.markasoftware.com",
+  "seed.namecoin.libreisp.se",
+  "dnsseed1.nmc.dotbit.zone",
+  "dnsseed2.nmc.dotbit.zone",
+  "dnsseed.nmc.testls.space"
+ ]
 }

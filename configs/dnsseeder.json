@@ -6,8 +6,10 @@
  "Pver": 70001,
  "DNSName": "seeder.example.com",
  "TTL": 600,
- "InitialIP": "0.0.0.0,0.0.0.0",
- "Seeder1": "seeder1.example.com",
- "Seeder2": "seed1.bob.com",
- "Seeder3": "seed2.example.com"
+ "InitialIPs": ["0.0.0.0","0.0.0.0"],
+ "Seeders": [
+  "seeder1.example.com",
+  "seed1.bob.com",
+  "seed2.example.com"
+ ]
 }

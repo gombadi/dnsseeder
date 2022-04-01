@@ -6,8 +6,17 @@
  "Pver": 70001,
  "DNSName": "btcseed.zagbot.com",
  "TTL": 600,
- "InitialIP": "0.0.0.0,0.0.0.0",
- "Seeder1": "dnsseed.bluematt.me",
- "Seeder2": "bitseed.xf2.org",
- "Seeder3": "dnsseed.bitcoin.dashjr.org"
+ "InitialIPs": ["0.0.0.0","0.0.0.0"],
+ "Seeders": [
+  "seed.bitcoin.sipa.be",
+  "dnsseed.bluematt.me",
+  "bitseed.xf2.org",
+  "dnsseed.bitcoin.dashjr.org",
+  "seed.bitcoinstats.com",
+  "seed.bitcoin.jonasschnelli.ch",
+  "seed.btc.petertodd.org",
+  "seed.bitcoin.sprovoost.nl",
+  "dnsseed.emzy.de",
+  "seed.bitcoin.wiz.biz"
+ ]
 }
