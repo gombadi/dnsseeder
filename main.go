@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"strings"
@@ -28,19 +29,24 @@ type NodeCounts struct {
 
 // configData holds information on the application
 type configData struct {
-	dnsUnknown uint64                // the number of dns requests for we are not configured to handle
-	uptime     time.Time             // application start time
-	port       string                // port for the dns server to listen on
-	http       string                // port for the web server to listen on
-	version    string                // application version
-	seeders    map[string]*dnsseeder // holds a pointer to all the current seeders
-	smtx       sync.RWMutex          // protect the seeders map
-	order      []string              // the order of loading the netfiles so we can display in this order
-	dns        map[string][]dns.RR   // holds details of all the currently served dns records
-	dnsmtx     sync.RWMutex          // protect the dns map
-	verbose    bool                  // verbose output cmdline option
-	debug      bool                  // debug cmdline option
-	stats      bool                  // stats cmdline option
+	dnsUnknown   uint64                // the number of dns requests for we are not configured to handle
+	uptime       time.Time             // application start time
+	port         string                // port for the dns server to listen on
+	http         string                // port for the web server to listen on
+	version      string                // application version
+	seeders      map[string]*dnsseeder // holds a pointer to all the current seeders
+	smtx         sync.RWMutex          // protect the seeders map
+	order        []string              // the order of loading the netfiles so we can display in this order
+	dns          map[string][]dns.RR   // holds details of all the currently served dns records
+	dnsmtx       sync.RWMutex          // protect the dns map
+	verbose      bool                  // verbose output cmdline option
+	debug        bool                  // debug cmdline option
+	stats        bool                  // stats cmdline option
+	proxy        string
+	proxyUser    string
+	proxyPass    string
+	torIsolation bool
+	dial         func(string, string, time.Duration) (net.Conn, error)
 }
 
 var config configData
@@ -60,7 +66,18 @@ func main() {
 	flag.BoolVar(&config.verbose, "v", false, "Display verbose output")
 	flag.BoolVar(&config.debug, "d", false, "Display debug output")
 	flag.BoolVar(&config.stats, "s", false, "Display stats output")
+	flag.StringVar(&config.proxy, "proxy", "", "Connect via SOCKS5 proxy (e.g. 127.0.0.1:9050)")
+	flag.StringVar(&config.proxyUser, "proxyuser", "", "Username for proxy server")
+	flag.StringVar(&config.proxyPass, "proxypass", "", "Password for proxy server")
+	flag.BoolVar(&config.torIsolation, "torisolation", false, "Enable Tor stream isolation by randomizing user credentials for each connection")
 	flag.Parse()
+
+	// Create dialer (e.g. for Tor use)
+	err := createDial(&config)
+	if err != nil {
+		fmt.Printf("Error creating dialer - %v\n", err)
+		os.Exit(1)
+	}
 
 	if j == true {
 		createNetFile()

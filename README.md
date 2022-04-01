@@ -67,7 +67,12 @@ Command line Options:
 -p port to listen on for DNS requests
 -d Produce debug output
 -v Produce verbose output
+-s Produce stats output
 -w Port to listen on for Web Interface
+-proxy SOCKS5 IP:port
+-proxyuser SOCKS5 username
+-proxypass SOCKS5 password
+-torisolation Enable Tor stream isolation.
 
 ```
 
