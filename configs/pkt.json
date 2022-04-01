@@ -1,0 +1,12 @@
+{
+ "Name": "PKT",
+ "Desc": "pkt.cash mainnet",
+ "ID": "0x082f00fc",
+ "Port": 64764,
+ "Pver": 70001,
+ "DNSName": "seed.pkt.ai",
+ "TTL": 600,
+ "InitialIP": "0.0.0.0,0.0.0.0",
+ "Seeder1": "seed.cjd.li",
+ "Seeder2": "pktdseed.pkt.world"
+}
