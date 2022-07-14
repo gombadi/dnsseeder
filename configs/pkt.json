@@ -6,7 +6,10 @@
  "Pver": 70001,
  "DNSName": "seed.pkt.ai",
  "TTL": 600,
- "InitialIP": "0.0.0.0,0.0.0.0",
- "Seeder1": "seed.cjd.li",
- "Seeder2": "pktdseed.pkt.world"
+ "InitialIPs": ["0.0.0.0","0.0.0.0"],
+ "Seeders": [
+     "seed.cjd.li",
+     "pktdseed.pkt.world",
+     "seed.pkt.pink"
+ ]
 }
